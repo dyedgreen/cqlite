@@ -1,3 +1,5 @@
+use peg::{error::ParseError, str::LineCol};
+
 pub mod ast;
 
 peg::parser! {
@@ -36,31 +38,37 @@ peg::parser! {
 
         // e.g. '()', '( a:PERSON )', '(b)', '(a : OTHER_THING)'
         rule node() -> Node<'input>
-            = "(" _* label:label() _* ")" {
-                Node { label }
-            }
+            = "(" _* label:label() _* ")" { Node::with_label(label) }
 
         // e.g. '-', '<-', '-[ name:KIND ]-', '<-[name]-'
         rule edge() -> Edge<'input>
-            = "-["  _* l:label() _* "]->" { Edge { direction: Direction::Right, label: l } }
-            / "-["  _* l:label() _*  "]-" { Edge { direction: Direction::Either, label: l } }
-            / "<-[" _* l:label() _*  "]-" { Edge { direction: Direction::Left, label: l } }
-            / "<-" { Edge { direction: Direction::Left, label: Label::empty() } }
-            / "->" { Edge { direction: Direction::Right, label: Label::empty() } }
-            / "-" { Edge { direction: Direction::Either, label: Label::empty() } }
+            =  "-[" _* l:label() _* "]->" { Edge::right(l) }
+            /  "-[" _* l:label() _* "]-"  { Edge::either(l) }
+            / "<-[" _* l:label() _* "]-"  { Edge::left(l) }
+            / "<-" { Edge::left(Label::empty()) }
+            / "->" { Edge::right(Label::empty()) }
+            / "-" { Edge::either(Label::empty()) }
 
-        // e.g. '(a)', '(a) -> (b) <- (c)', ...
+        // e.g. 'MATCH (a)', 'MATCH (a) -> (b) <- (c)', ...
         rule match_clause() -> MatchClause<'input>
             = "MATCH" __+ start:node()
               edges:( (__* e:edge() __* n:node() { (e, n) }) ** "" ) {
                 MatchClause { start, edges }
             }
 
+        rule return_clause() -> Vec<&'input str>
+            = "RETURN" __+ items:( ident() ++ (__* "," __*) ) { items }
+
         pub rule query() -> Query<'input>
-            = __* match_clauses:(match_clause() ** (__+))
-              __* "RETURN" __+ return_clause:(ident() ++ (__* "," __*))
+            = __*
+              match_clauses:( match_clause() ** (__+) )
+              return_clause:( r:(__+ r:return_clause() {r})? { r.unwrap_or_else(Vec::new) } )
               __* { Query { match_clauses, create_clause: (), return_clause } }
     }
+}
+
+pub fn parse(input: &str) -> Result<ast::Query<'_>, ParseError<LineCol>> {
+    cypher::query(input)
 }
 
 #[cfg(test)]
