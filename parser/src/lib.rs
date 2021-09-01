@@ -51,19 +51,15 @@ peg::parser! {
 
         // e.g. '(a)', '(a) -> (b) <- (c)', ...
         rule match_clause() -> MatchClause<'input>
-            = start:node()
+            = "MATCH" __+ start:node()
               edges:( (__* e:edge() __* n:node() { (e, n) }) ** "" ) {
                 MatchClause { start, edges }
             }
 
-        // a full cypher query
         pub rule query() -> Query<'input>
-            = __*
-              match_clauses:(("MATCH" __+ m:match_clause() { m }) ++ (__+))
-              __+
-              "RETURN" __+ return_clause:(ident() ++ (__* "," __*))
-              __*
-              { Query { match_clauses, return_clause } }
+            = __* match_clauses:(match_clause() ** (__+))
+              __* "RETURN" __+ return_clause:(ident() ++ (__* "," __*))
+              __* { Query { match_clauses, create_clause: (), return_clause } }
     }
 }
 
@@ -76,7 +72,7 @@ mod tests {
     fn match_clauses_work() {
         // simple
         assert_eq!(
-            cypher::query("MATCH (a) - (b) RETURN a"),
+            cypher::query("MATCH (a) - (b) RETURN a "),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_label(Label::with_name("a")),
@@ -85,21 +81,23 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
+                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a:KIND) <- ( ) RETURN a"),
+            cypher::query("MATCH (a:KIND) <- ( )\nRETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_label(Label::new("a", "KIND")),
                     edges: vec![(Edge::left(Label::empty()), Node::with_label(Label::empty()))],
                 }],
+                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
         assert_eq!(
-            cypher::query("MATCH () -> (:KIND_ONLY) RETURN a"),
+            cypher::query(" MATCH () -> (:KIND_ONLY) RETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_label(Label::empty()),
@@ -108,6 +106,7 @@ mod tests {
                         Node::with_label(Label::with_kind("KIND_ONLY"))
                     )],
                 }],
+                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -123,6 +122,7 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
+                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -136,6 +136,7 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
+                create_clause: (),
                 return_clause: vec!["e", "b"],
             })
         );
@@ -149,6 +150,7 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
+                create_clause: (),
                 return_clause: vec!["a", "b"],
             })
         );
@@ -170,6 +172,7 @@ mod tests {
                         )
                     ],
                 }],
+                create_clause: (),
                 return_clause: vec!["a", "b", "c"],
             })
         );
