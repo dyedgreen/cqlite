@@ -110,7 +110,7 @@ impl Store {
 }
 
 impl<'a> MutStoreTxn<'a> {
-    pub fn get_id_seq(&mut self) -> u64 {
+    pub fn id_seq(&mut self) -> u64 {
         let id = self.txn.root(ID_SQUENCE).unwrap_or(0);
         self.txn.set_root(ID_SQUENCE, id + 1);
         id

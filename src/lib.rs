@@ -106,7 +106,7 @@ impl Graph {
 
     fn create_node<'a>(txn: &'a mut MutStoreTxn, kind: &str) -> Result<Node<'a>, Error> {
         let node = Node {
-            id: txn.get_id_seq(),
+            id: txn.id_seq(),
             kind,
         };
         // TODO: This can avoid allocating the vector by implementing
@@ -124,7 +124,7 @@ impl Graph {
         target: u64,
     ) -> Result<Node<'a>, Error> {
         let edge = Edge {
-            id: txn.get_id_seq(),
+            id: txn.id_seq(),
             kind,
             origin,
             target,

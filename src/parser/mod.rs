@@ -10,7 +10,7 @@ peg::parser! {
             = [' ']
 
         rule __()
-            = [' ' | '\n']
+            = [' ' | '\n' | '\t']
 
         rule alpha()
             = ['a'..='z' | 'A'..='Z']
@@ -33,6 +33,7 @@ peg::parser! {
         rule ident() -> &'input str
             = ident:$(alpha()alpha_num()*) { ident }
 
+        // e.g. 'a', 'a : PERSON', ': KNOWS'
         rule label() -> Label<'input>
             = name:ident()? kind:( _* ":" _* k:ident() { k } )? { Label { name, kind } }
 
@@ -61,9 +62,9 @@ peg::parser! {
 
         pub rule query() -> Query<'input>
             = __*
-              match_clauses:( match_clause() ** (__+) )
-              return_clause:( r:(__+ r:return_clause() {r})? { r.unwrap_or_else(Vec::new) } )
-              __* { Query { match_clauses, create_clause: (), return_clause } }
+              match_clauses:( match_clause() ++ (__+) )
+              __+ return_clause:return_clause()
+              __* { Query { match_clauses, return_clause } }
     }
 }
 
@@ -89,7 +90,6 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
-                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -100,7 +100,6 @@ mod tests {
                     start: Node::with_label(Label::new("a", "KIND")),
                     edges: vec![(Edge::left(Label::empty()), Node::with_label(Label::empty()))],
                 }],
-                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -114,7 +113,6 @@ mod tests {
                         Node::with_label(Label::with_kind("KIND_ONLY"))
                     )],
                 }],
-                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -130,7 +128,6 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
-                create_clause: (),
                 return_clause: vec!["a"],
             })
         );
@@ -144,7 +141,6 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
-                create_clause: (),
                 return_clause: vec!["e", "b"],
             })
         );
@@ -158,7 +154,6 @@ mod tests {
                         Node::with_label(Label::with_name("b"))
                     )],
                 }],
-                create_clause: (),
                 return_clause: vec!["a", "b"],
             })
         );
@@ -180,7 +175,6 @@ mod tests {
                         )
                     ],
                 }],
-                create_clause: (),
                 return_clause: vec!["a", "b", "c"],
             })
         );

@@ -1,7 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Query<'a> {
     pub match_clauses: Vec<MatchClause<'a>>,
-    pub create_clause: (),
     pub return_clause: Vec<&'a str>,
 }
 
