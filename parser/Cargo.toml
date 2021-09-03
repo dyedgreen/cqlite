@@ -1,7 +1,0 @@
-[package]
-name = "parser"
-version = "0.1.0"
-edition = "2018"
-
-[dependencies]
-peg = "0.7.0"
