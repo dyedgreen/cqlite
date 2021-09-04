@@ -1,12 +1,12 @@
 use crate::Error;
 use sanakirja::btree::{Db, UDb};
-use sanakirja::{
-    btree, AllocPage, Commit, Env, LoadPage, MutTxn, RootDb, Storable, Txn, UnsizedStorable,
-};
+use sanakirja::{btree, Commit, Env, MutTxn, RootDb, Storable, Txn, UnsizedStorable};
 use std::path::Path;
 
+mod iter;
 mod types;
 
+pub use iter::{IndexIter, ValueIter};
 pub use types::{Edge, Node};
 
 // alloc the pages to write to
@@ -26,11 +26,11 @@ pub(crate) struct Store {
 pub(crate) struct StoreTxn<'a> {
     pub txn: Txn<&'a Env>,
     // node and edges storage
-    pub nodes: Option<UDb<u64, [u8]>>, // FIXME: having these be optional is really annoying ...
-    pub edges: Option<UDb<u64, [u8]>>,
+    pub nodes: UDb<u64, [u8]>, // FIXME: having these be optional is really annoying ...
+    pub edges: UDb<u64, [u8]>,
     // maps from nodes to edges
-    pub origins: Option<Db<u64, u64>>,
-    pub targets: Option<Db<u64, u64>>,
+    pub origins: Db<u64, u64>,
+    pub targets: Db<u64, u64>,
 }
 
 pub(crate) struct MutStoreTxn<'a> {
@@ -48,7 +48,17 @@ impl Store {
         // TODO: How small can the thing be initially,
         // how many version do we want to allow?
         let env = Env::new(path, 4096 * 4, 2)?;
-        Ok(Self { env })
+        let store = Self { env };
+        store.mut_txn()?.commit()?;
+        Ok(store)
+    }
+
+    pub fn open_anon() -> Result<Self, sanakirja::Error> {
+        // TODO: is the size good?
+        let env = Env::new_anon(4096 * 4, 2)?;
+        let store = Self { env };
+        store.mut_txn()?.commit()?;
+        Ok(store)
     }
 
     pub fn mut_txn(&self) -> Result<MutStoreTxn, sanakirja::Error> {
@@ -66,12 +76,12 @@ impl Store {
         })
     }
 
-    pub fn txn(&self) -> Result<StoreTxn, sanakirja::Error> {
+    pub fn txn(&self) -> Result<StoreTxn, Error> {
         let txn = Env::txn_begin(&self.env)?;
-        let nodes = txn.root_db(DB_NODES);
-        let edges = txn.root_db(DB_EDGES);
-        let origins = txn.root_db(DB_EDGE_ORIGINS);
-        let targets = txn.root_db(DB_EDGE_TARGETS);
+        let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
+        let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
+        let origins = txn.root_db(DB_EDGE_ORIGINS).ok_or(Error::Todo)?;
+        let targets = txn.root_db(DB_EDGE_TARGETS).ok_or(Error::Todo)?;
         Ok(StoreTxn {
             txn,
             nodes,
@@ -114,29 +124,21 @@ impl Store {
 }
 
 impl<'e> StoreTxn<'e> {
-    fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
-        if let Some(nodes) = &self.nodes {
-            let entry = btree::get(&self.txn, nodes, &id, None)?;
-            if let Some((_, bytes)) = entry {
-                let node = bincode::deserialize(bytes.as_ref())?;
-                Ok(Some(node))
-            } else {
-                Ok(None)
-            }
+    pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
+        let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
+        if let Some((_, bytes)) = entry {
+            let node = bincode::deserialize(bytes.as_ref())?;
+            Ok(Some(node))
         } else {
             Ok(None)
         }
     }
 
-    fn get_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
-        if let Some(edges) = &self.edges {
-            let entry = btree::get(&self.txn, edges, &id, None)?;
-            if let Some((_, bytes)) = entry {
-                let node = bincode::deserialize(bytes.as_ref())?;
-                Ok(Some(node))
-            } else {
-                Ok(None)
-            }
+    pub fn get_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
+        let entry = btree::get(&self.txn, &self.edges, &id, None)?;
+        if let Some((_, bytes)) = entry {
+            let node = bincode::deserialize(bytes.as_ref())?;
+            Ok(Some(node))
         } else {
             Ok(None)
         }
@@ -230,7 +232,7 @@ mod tests {
         let node1 = txn.create_node("PERSON").unwrap().id;
         let node2 = txn.create_node("PERSON").unwrap().id;
         let edge = txn.create_edge("KNOWS", node1, node2).unwrap().id;
-        txn.commit();
+        txn.commit().unwrap();
 
         let txn = store.txn().unwrap();
         let node1 = txn.get_node(node1).unwrap().unwrap();
