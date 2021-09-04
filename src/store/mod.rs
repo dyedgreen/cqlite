@@ -1,9 +1,13 @@
+use crate::Error;
 use sanakirja::btree::{Db, UDb};
 use sanakirja::{
     btree, AllocPage, Commit, Env, LoadPage, MutTxn, RootDb, Storable, Txn, UnsizedStorable,
 };
-use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+mod types;
+
+pub use types::{Edge, Node};
 
 // alloc the pages to write to
 // them every time ... You can free them
@@ -109,11 +113,101 @@ impl Store {
     }
 }
 
-impl<'a> MutStoreTxn<'a> {
+impl<'e> StoreTxn<'e> {
+    fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
+        if let Some(nodes) = &self.nodes {
+            let entry = btree::get(&self.txn, nodes, &id, None)?;
+            if let Some((_, bytes)) = entry {
+                let node = bincode::deserialize(bytes.as_ref())?;
+                Ok(Some(node))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn get_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
+        if let Some(edges) = &self.edges {
+            let entry = btree::get(&self.txn, edges, &id, None)?;
+            if let Some((_, bytes)) = entry {
+                let node = bincode::deserialize(bytes.as_ref())?;
+                Ok(Some(node))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<'e> MutStoreTxn<'e> {
     pub fn id_seq(&mut self) -> u64 {
         let id = self.txn.root(ID_SQUENCE).unwrap_or(0);
         self.txn.set_root(ID_SQUENCE, id + 1);
         id
+    }
+
+    pub fn create_node<'t>(&'t mut self, kind: &str) -> Result<Node<'t>, Error> {
+        let node = Node {
+            id: self.id_seq(),
+            kind,
+        };
+        // TODO: This can avoid allocating the vector by implementing
+        // UnsizedStorabe directly ...
+        let node_bytes = bincode::serialize(&node)?;
+        btree::put(
+            &mut self.txn,
+            &mut self.nodes,
+            &node.id,
+            node_bytes.as_ref(),
+        )?;
+        let entry = btree::get(&self.txn, &self.nodes, &node.id, None)?.ok_or(Error::Todo)?;
+        Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
+    }
+
+    pub fn unchecked_create_edge<'t>(
+        &'t mut self,
+        kind: &str,
+        origin: u64,
+        target: u64,
+    ) -> Result<Node<'t>, Error> {
+        let edge = Edge {
+            id: self.id_seq(),
+            kind,
+            origin,
+            target,
+        };
+        // TODO: This can avoid allocating the vector by implementing
+        // UnsizedStorabe directly ...
+        let edge_bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
+        btree::put(
+            &mut self.txn,
+            &mut self.edges,
+            &edge.id,
+            edge_bytes.as_ref(),
+        )?;
+        btree::put(&mut self.txn, &mut self.origins, &origin, &edge.id)?;
+        btree::put(&mut self.txn, &mut self.targets, &target, &edge.id)?;
+        let entry = btree::get(&self.txn, &self.edges, &edge.id, None)?.ok_or(Error::Todo)?;
+        Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
+    }
+
+    pub fn create_edge<'t>(
+        &'t mut self,
+        kind: &str,
+        origin: u64,
+        target: u64,
+    ) -> Result<Node<'t>, Error> {
+        let origin_exists = btree::get(&self.txn, &self.nodes, &origin, None)?.is_some();
+        let target_exists = btree::get(&self.txn, &self.nodes, &target, None)?.is_some();
+        if origin_exists && target_exists {
+            self.unchecked_create_edge(kind, origin, target)
+        } else {
+            Err(Error::Todo)
+        }
     }
 
     pub fn commit(mut self) -> Result<(), sanakirja::Error> {
@@ -122,5 +216,29 @@ impl<'a> MutStoreTxn<'a> {
         self.txn.set_root(DB_EDGE_ORIGINS, self.origins.db);
         self.txn.set_root(DB_EDGE_TARGETS, self.targets.db);
         self.txn.commit()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_nodes_and_edges() {
+        let store = Store::open("test.gqlite").unwrap();
+        let mut txn = store.mut_txn().unwrap();
+        let node1 = txn.create_node("PERSON").unwrap().id;
+        let node2 = txn.create_node("PERSON").unwrap().id;
+        let edge = txn.create_edge("KNOWS", node1, node2).unwrap().id;
+        txn.commit();
+
+        let txn = store.txn().unwrap();
+        let node1 = txn.get_node(node1).unwrap().unwrap();
+        let node2 = txn.get_node(node2).unwrap().unwrap();
+        let edge = txn.get_edge(edge).unwrap().unwrap();
+
+        assert_eq!(node1.kind, "PERSON");
+        assert_eq!(node2.kind, "PERSON");
+        assert_eq!(edge.kind, "KNOWS");
     }
 }

@@ -1,0 +1,4 @@
+enum Instruction {
+    LoadNode,
+    LoadEdge,
+}
