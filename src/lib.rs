@@ -1,9 +1,7 @@
-#![allow(unused)] // TODO: Delete !
+#![allow(dead_code)] // TODO: Delete !
 
-use sanakirja::btree;
-use serde::{Deserialize, Serialize};
 use std::path::Path;
-use store::{MutStoreTxn, Store, StoreTxn};
+use store::Store;
 
 pub(crate) mod error;
 pub(crate) mod parser;

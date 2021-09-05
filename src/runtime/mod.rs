@@ -15,9 +15,15 @@ pub(crate) struct Program<'e, 't, 'i> {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Instruction {
-    Jump(usize), // go to inst
-    Yield,       // nodes are ready for return
-    Halt,        // exits the program
+    /// Does nothing, can be used as a placeholder
+    NoOp,
+
+    /// Set the instruction pointer
+    Jump(usize),
+    /// Yields the interpreter, nodes and edges are ready for return
+    Yield,
+    /// Exists the program
+    Halt,
 
     IterNodes,              // iter all nodes
     IterOriginEdges(usize), // iter edges originating from given node in stack
@@ -62,6 +68,8 @@ impl<'e, 't, 'i> Program<'e, 't, 'i> {
     pub fn run(&mut self) -> Result<Status, Error> {
         loop {
             match self.instructions[self.current_inst] {
+                Instruction::NoOp => self.current_inst += 1,
+
                 Instruction::Jump(target) => self.current_inst = target,
                 Instruction::Yield => {
                     self.current_inst += 1;
