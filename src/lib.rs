@@ -42,7 +42,7 @@ mod tests {
         txn.commit().unwrap();
 
         let txn = store.txn().unwrap();
-        let mut program = runtime::Program::new(&txn, &code);
+        let mut program = runtime::VirtualMachine::new(&txn, &code);
 
         assert_eq!(Ok(runtime::Status::Yield), program.run());
         assert_eq!(2, program.node_stack.len());
