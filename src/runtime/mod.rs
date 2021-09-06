@@ -2,13 +2,15 @@ use crate::store::{Edge, IndexIter, Node, StoreTxn, ValueIter};
 use crate::Error;
 use sanakirja::{Env, Txn};
 
+// TODO: Differentiate program and execution ...
+
 pub(crate) struct Program<'e, 't, 'i> {
     txn: &'t StoreTxn<'e>,
     instructions: &'i [Instruction],
     current_inst: usize,
 
-    node_stack: Vec<Node<'t>>,
-    edge_stack: Vec<Edge<'t>>,
+    pub(crate) node_stack: Vec<Node<'t>>,
+    pub(crate) edge_stack: Vec<Edge<'t>>,
     node_iters: Vec<ValueIter<'t, Txn<&'e Env>, Node<'t>>>,
     edge_iters: Vec<IndexIter<'t, Txn<&'e Env>>>,
 }

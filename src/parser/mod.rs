@@ -21,6 +21,12 @@ peg::parser! {
         rule alpha_num()
             = ['a'..='z' | 'A'..='Z' | '0'..='9' | '_']
 
+        rule kw_match()
+            = ['m'|'M']['a'|'A']['t'|'T']['c'|'C']['h'|'H']
+
+        rule kw_return()
+            = ['r'|'R']['e'|'E']['t'|'T']['u'|'U']['r'|'R']['n'|'N']
+
         // e.g. '42', '-1'
         rule integer() -> i64
             = integer:$("-"?num()+) {? integer.parse().or(Err("invalid integer")) }
@@ -52,13 +58,13 @@ peg::parser! {
 
         // e.g. 'MATCH (a)', 'MATCH (a) -> (b) <- (c)', ...
         rule match_clause() -> MatchClause<'input>
-            = "MATCH" __+ start:node()
+            = kw_match() __+ start:node()
               edges:( (__* e:edge() __* n:node() { (e, n) }) ** "" ) {
                 MatchClause { start, edges }
             }
 
         rule return_clause() -> Vec<&'input str>
-            = "RETURN" __+ items:( ident() ++ (__* "," __*) ) { items }
+            = kw_return() __+ items:( ident() ++ (__* "," __*) ) { items }
 
         pub rule query() -> Query<'input>
             = __*

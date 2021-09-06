@@ -1,46 +1,15 @@
-use crate::Error;
-use crate::{parser::ast, runtime::Instruction};
-use compile::{Compile, CompileEnv};
-use plan::{MatchNode, ReturnValue};
-
 mod build;
 mod compile;
 mod plan;
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct QueryPlan {
-    match_clauses: Vec<MatchNode>,
-    return_clause: Vec<ReturnValue>,
-}
-
-impl QueryPlan {
-    pub fn new(query: &ast::Query) -> Result<Self, Error> {
-        build::build_plan(query)
-    }
-
-    pub fn optimize(&mut self) {
-        // we could re-write the plan ...
-        unimplemented!()
-    }
-
-    // return program instructions and map from return position to
-    // node / edge stack
-    pub fn compile(&self) -> Result<(Vec<Instruction>, Vec<ReturnValue>), Error> {
-        assert_eq!(1, self.match_clauses.len()); // TODO
-
-        let mut code = Vec::new();
-        self.match_clauses[0].compile(&mut code, &mut CompileEnv::empty())?;
-        code.push(Instruction::Halt);
-
-        Ok((code, vec![]))
-    }
-}
+pub(crate) use plan::QueryPlan;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::ast;
+    use crate::runtime::Instruction;
     use plan::*;
-    use std::rc::Rc;
 
     #[test]
     fn build_a_to_b() {
@@ -49,7 +18,7 @@ mod tests {
             match_clauses: vec![ast::MatchClause {
                 start: ast::Node::with_label(ast::Label::with_name("a")),
                 edges: vec![(
-                    ast::Edge::left(ast::Label::empty()),
+                    ast::Edge::right(ast::Label::empty()),
                     ast::Node::with_label(ast::Label::with_name("b")),
                 )],
             }],
@@ -57,43 +26,26 @@ mod tests {
         };
 
         let plan = QueryPlan {
-            match_clauses: vec![MatchNode {
-                name: 0,
-                load: LoadNode::Any,
-                next: Some(Rc::new(MatchEdge {
-                    name: 1,
-                    load: LoadEdge::Origin(0),
-                    next: MatchNode {
-                        name: 2,
-                        load: LoadNode::Target(1),
-                        next: None,
-                    },
-                })),
-            }],
-            return_clause: vec![ReturnValue::Node(0), ReturnValue::Node(2)],
+            matches: vec![
+                MatchStep::LoadAnyNode { name: 0 },
+                MatchStep::LoadOriginEdge { name: 1, node: 0 },
+                MatchStep::LoadTargetNode { name: 2, edge: 1 },
+            ],
+            returns: vec![NamedValue::Node(0), NamedValue::Node(2)],
         };
 
-        let build_plan = QueryPlan::new(&query).unwrap();
-        assert_eq!(plan, build_plan);
+        assert_eq!(plan, QueryPlan::new(&query).unwrap());
     }
 
     #[test]
     fn compile_a_to_b() {
         let plan = QueryPlan {
-            match_clauses: vec![MatchNode {
-                name: 0,
-                load: LoadNode::Any,
-                next: Some(Rc::new(MatchEdge {
-                    name: 1,
-                    load: LoadEdge::Origin(0),
-                    next: MatchNode {
-                        name: 2,
-                        load: LoadNode::Target(1),
-                        next: None,
-                    },
-                })),
-            }],
-            return_clause: vec![ReturnValue::Node(0), ReturnValue::Node(2)],
+            matches: vec![
+                MatchStep::LoadAnyNode { name: 0 },
+                MatchStep::LoadOriginEdge { name: 1, node: 0 },
+                MatchStep::LoadTargetNode { name: 2, edge: 1 },
+            ],
+            returns: vec![NamedValue::Node(0), NamedValue::Node(2)],
         };
 
         let code = {
@@ -114,7 +66,6 @@ mod tests {
             ]
         };
 
-        let (compile_code, _) = plan.compile().unwrap();
-        assert_eq!(code, compile_code);
+        assert_eq!(code, plan.compile().unwrap());
     }
 }

@@ -1,111 +1,190 @@
 use crate::parser::ast;
 use crate::Error;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-use super::plan::{LoadEdge, LoadNode, MatchEdge, MatchNode};
-use super::QueryPlan;
+use super::plan::{MatchStep, NamedValue, QueryPlan};
 
 pub(crate) struct BuildEnv<'a> {
-    names: HashMap<&'a str, (usize, NameType)>,
+    names: HashMap<&'a str, NamedValue>,
     next_name: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NameType {
-    Node,
-    Edge,
-}
-
 impl<'a> BuildEnv<'a> {
-    fn get_name(&mut self, name: Option<&'a str>, name_type: NameType) -> Result<usize, Error> {
-        if let Some(name) = name {
-            match self.names.get(&name) {
-                Some((name, typ)) if *typ == name_type => Ok(*name),
-                Some(_) => Err(Error::Todo),
-                None => {
-                    self.names.insert(name, (self.next_name, name_type));
-                    self.next_name += 1;
-                    Ok(self.next_name - 1)
-                }
-            }
-        } else {
-            self.next_name += 1;
-            Ok(self.next_name - 1)
+    fn new() -> Self {
+        Self {
+            names: HashMap::new(),
+            next_name: 0,
         }
     }
 
-    fn get_node_name(&mut self, name: Option<&'a str>) -> Result<usize, Error> {
-        self.get_name(name, NameType::Node)
+    fn next_name(&mut self) -> usize {
+        self.next_name += 1;
+        self.next_name - 1
     }
 
-    fn get_edge_name(&mut self, name: Option<&'a str>) -> Result<usize, Error> {
-        self.get_name(name, NameType::Edge)
+    fn get_node(&self, name: &str) -> Result<Option<usize>, Error> {
+        match self.names.get(&name) {
+            Some(NamedValue::Node(name)) => Ok(Some(*name)),
+            Some(NamedValue::Edge(_)) => Err(Error::Todo),
+            None => Ok(None),
+        }
+    }
+
+    fn get_edge(&self, name: &str) -> Result<Option<usize>, Error> {
+        match self.names.get(&name) {
+            Some(NamedValue::Node(_)) => Err(Error::Todo),
+            Some(NamedValue::Edge(name)) => Ok(Some(*name)),
+            None => Ok(None),
+        }
+    }
+
+    fn create_node(&mut self, name: &'a str) -> Result<usize, Error> {
+        match self.names.get(&name) {
+            Some(NamedValue::Node(name)) => Ok(*name),
+            Some(NamedValue::Edge(_)) => Err(Error::Todo),
+            None => {
+                let next_name = self.next_name();
+                self.names.insert(name, NamedValue::Node(next_name));
+                Ok(next_name)
+            }
+        }
+    }
+
+    fn create_edge(&mut self, name: &'a str) -> Result<usize, Error> {
+        match self.names.get(&name) {
+            Some(NamedValue::Node(_)) => Err(Error::Todo),
+            Some(NamedValue::Edge(name)) => Ok(*name),
+            None => {
+                let next_name = self.next_name();
+                self.names.insert(name, NamedValue::Edge(next_name));
+                Ok(next_name)
+            }
+        }
     }
 }
 
-fn build_match_clause<'a>(
-    clause: &ast::MatchClause<'a>,
-    env: &mut BuildEnv<'a>,
-) -> Result<MatchNode, Error> {
-    fn build_connection<'a>(
-        prev: usize,
-        env: &mut BuildEnv<'a>,
-        edges: &[(ast::Edge<'a>, ast::Node<'a>)],
-    ) -> Result<Option<Rc<MatchEdge>>, Error> {
-        Ok(edges
-            .get(0)
-            .map(|(edge, node)| -> Result<Rc<MatchEdge>, Error> {
-                Ok(match edge.direction {
-                    ast::Direction::Either => unimplemented!(),
-                    ast::Direction::Left => {
-                        let edge_name = env.get_edge_name(edge.label.name)?;
-                        let node_name = env.get_node_name(node.label.name)?;
-                        // START: TODO
-                        assert!(node.label.kind.is_none());
-                        assert!(edge.label.kind.is_none());
-                        // END: TODO
-                        Rc::new(MatchEdge {
-                            name: edge_name,
-                            load: LoadEdge::Origin(prev),
-                            next: MatchNode {
-                                name: node_name,
-                                load: LoadNode::Target(edge_name),
-                                next: build_connection(node_name, env, &edges[1..])?,
-                            },
-                        })
+impl QueryPlan {
+    pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
+        let mut env = BuildEnv::new();
+        let mut matches = vec![];
+
+        for clause in &query.match_clauses {
+            assert!(clause.start.label.kind.is_none()); // TODO
+
+            let mut prev_node_name = if let Some(name) = clause.start.label.name {
+                if let Some(name) = env.get_node(name)? {
+                    name
+                } else {
+                    let name = env.create_node(name)?;
+                    matches.push(MatchStep::LoadAnyNode { name });
+                    name
+                }
+            } else {
+                let name = env.next_name();
+                matches.push(MatchStep::LoadAnyNode { name });
+                name
+            };
+
+            for (edge, node) in &clause.edges {
+                assert!(edge.label.kind.is_none()); // TODO
+
+                let edge_name = if let Some(name) = edge.label.name {
+                    if let Some(name) = env.get_edge(name)? {
+                        match edge.direction {
+                            ast::Direction::Left => matches.push(MatchStep::FilterIsTarget {
+                                node: prev_node_name,
+                                edge: name,
+                            }),
+                            ast::Direction::Right => matches.push(MatchStep::FilterIsOrigin {
+                                node: prev_node_name,
+                                edge: name,
+                            }),
+                            ast::Direction::Either => unimplemented!(),
+                        }
+                        name
+                    } else {
+                        let name = env.create_edge(name)?;
+                        match edge.direction {
+                            ast::Direction::Left => matches.push(MatchStep::LoadTargetEdge {
+                                name,
+                                node: prev_node_name,
+                            }),
+                            ast::Direction::Right => matches.push(MatchStep::LoadOriginEdge {
+                                name,
+                                node: prev_node_name,
+                            }),
+                            ast::Direction::Either => unimplemented!(),
+                        }
+                        name
                     }
-                    ast::Direction::Right => unimplemented!(),
-                })
-            })
-            .transpose()?)
+                } else {
+                    let name = env.next_name();
+                    match edge.direction {
+                        ast::Direction::Left => matches.push(MatchStep::LoadTargetEdge {
+                            name,
+                            node: prev_node_name,
+                        }),
+                        ast::Direction::Right => matches.push(MatchStep::LoadOriginEdge {
+                            name,
+                            node: prev_node_name,
+                        }),
+                        ast::Direction::Either => unimplemented!(),
+                    }
+                    name
+                };
+
+                prev_node_name = if let Some(name) = node.label.name {
+                    if let Some(name) = env.get_node(name)? {
+                        match edge.direction {
+                            ast::Direction::Left => matches.push(MatchStep::FilterIsOrigin {
+                                node: name,
+                                edge: edge_name,
+                            }),
+                            ast::Direction::Right => matches.push(MatchStep::FilterIsTarget {
+                                node: name,
+                                edge: edge_name,
+                            }),
+                            ast::Direction::Either => unimplemented!(),
+                        }
+                        name
+                    } else {
+                        let name = env.create_node(name)?;
+                        match edge.direction {
+                            ast::Direction::Left => matches.push(MatchStep::LoadOriginNode {
+                                name,
+                                edge: edge_name,
+                            }),
+                            ast::Direction::Right => matches.push(MatchStep::LoadTargetNode {
+                                name,
+                                edge: edge_name,
+                            }),
+                            ast::Direction::Either => unimplemented!(),
+                        }
+                        name
+                    }
+                } else {
+                    let name = env.next_name();
+                    match edge.direction {
+                        ast::Direction::Left => matches.push(MatchStep::LoadOriginNode {
+                            name,
+                            edge: edge_name,
+                        }),
+                        ast::Direction::Right => matches.push(MatchStep::LoadTargetNode {
+                            name,
+                            edge: edge_name,
+                        }),
+                        ast::Direction::Either => unimplemented!(),
+                    }
+                    name
+                };
+            }
+        }
+
+        let mut returns = Vec::with_capacity(query.return_clause.len());
+        for &name in &query.return_clause {
+            returns.push(*env.names.get(name).ok_or(Error::Todo)?);
+        }
+
+        Ok(QueryPlan { matches, returns })
     }
-
-    assert!(clause.start.label.kind.is_none()); // TODO
-    let name = env.get_node_name(clause.start.label.name)?;
-    Ok(MatchNode {
-        name: name,
-        load: LoadNode::Any,
-        next: build_connection(name, env, clause.edges.as_slice())?,
-    })
-}
-
-pub(crate) fn build_plan(query: &ast::Query) -> Result<QueryPlan, Error> {
-    assert_eq!(1, query.match_clauses.len()); // TODO
-
-    let mut env = BuildEnv {
-        names: HashMap::new(),
-        next_name: 0,
-    };
-
-    let mut match_clauses = Vec::with_capacity(query.match_clauses.len());
-    for clause in &query.match_clauses {
-        match_clauses.push(build_match_clause(clause, &mut env)?);
-    }
-    let return_clause = Vec::new();
-
-    Ok(QueryPlan {
-        match_clauses,
-        return_clause,
-    })
 }

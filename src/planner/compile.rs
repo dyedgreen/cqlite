@@ -2,7 +2,7 @@ use crate::runtime::Instruction;
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{LoadEdge, LoadNode, MatchEdge, MatchNode};
+use super::plan::{MatchStep, QueryPlan};
 
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
@@ -11,7 +11,7 @@ pub struct CompileEnv {
 }
 
 impl CompileEnv {
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Self {
             names: HashMap::new(),
             node_stack_len: 0,
@@ -42,78 +42,148 @@ impl CompileEnv {
     fn get_stack_idx(&self, name: usize) -> Result<usize, Error> {
         self.names.get(&name).map(|idx| *idx).ok_or(Error::Todo)
     }
-}
 
-pub(crate) trait Compile {
-    fn compile(&self, code: &mut Vec<Instruction>, env: &mut CompileEnv) -> Result<(), Error>;
-}
+    fn compile_step(
+        &mut self,
+        code: &mut Vec<Instruction>,
+        steps: &[MatchStep],
+    ) -> Result<(), Error> {
+        if let Some(step) = steps.get(0) {
+            let start = code.len();
+            match step {
+                MatchStep::LoadAnyNode { name } => {
+                    code.push(Instruction::IterNodes);
+                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.push_node(*name);
+                    self.compile_step(code, &steps[1..])?;
+                    self.pop_node(*name);
+                    code.push(Instruction::PopNode);
+                    code.push(Instruction::Jump(start + 1));
+                    code[start + 1] = Instruction::NextNode(code.len());
+                }
+                MatchStep::LoadTargetNode { name, edge } => {
+                    code.push(Instruction::LoadTargetNode(self.get_stack_idx(*edge)?));
+                    self.push_node(*name);
+                    self.compile_step(code, &steps[1..])?;
+                    self.pop_node(*name);
+                    code.push(Instruction::PopNode);
+                }
+                MatchStep::LoadOriginNode { name, edge } => {
+                    code.push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
+                    self.push_node(*name);
+                    self.compile_step(code, &steps[1..])?;
+                    self.pop_node(*name);
+                    code.push(Instruction::PopNode);
+                }
 
-impl Compile for MatchNode {
-    fn compile(&self, code: &mut Vec<Instruction>, env: &mut CompileEnv) -> Result<(), Error> {
-        let start = code.len();
+                MatchStep::LoadOriginEdge { name, node } => {
+                    code.push(Instruction::IterOriginEdges(self.get_stack_idx(*node)?));
+                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.push_edge(*name);
+                    self.compile_step(code, &steps[1..])?;
+                    self.pop_edge(*name);
+                    code.push(Instruction::PopEdge);
+                    code.push(Instruction::Jump(start + 1));
+                    code[start + 1] = Instruction::NextEdge(code.len());
+                }
+                MatchStep::LoadTargetEdge { name, node } => {
+                    code.push(Instruction::IterTargetEdges(self.get_stack_idx(*node)?));
+                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.push_edge(*name);
+                    self.compile_step(code, &steps[1..])?;
+                    self.pop_edge(*name);
+                    code.push(Instruction::PopEdge);
+                    code.push(Instruction::Jump(start + 1));
+                    code[start + 1] = Instruction::NextEdge(code.len());
+                }
 
-        match self.load {
-            LoadNode::Any => {
-                code.push(Instruction::IterNodes);
-                code.push(Instruction::NoOp); // set after, since jump position is unknown
-                env.push_node(self.name);
+                _ => unimplemented!(),
             }
-            LoadNode::Target(edge) => {
-                code.push(Instruction::LoadTargetNode(env.get_stack_idx(edge)?));
-                env.push_node(self.name);
-            }
-            _ => unimplemented!(),
-        }
-
-        if let Some(next) = &self.next {
-            next.compile(code, env)?;
+            Ok(())
         } else {
             code.push(Instruction::Yield);
+            Ok(())
         }
-
-        match self.load {
-            LoadNode::Any => {
-                env.pop_node(self.name);
-                code[start + 1] = Instruction::NextNode(code.len() + 2);
-                code.push(Instruction::PopNode);
-                code.push(Instruction::Jump(start + 1));
-            }
-            LoadNode::Target(_) => {
-                env.pop_node(self.name);
-                code.push(Instruction::PopNode);
-            }
-            _ => unimplemented!(),
-        }
-
-        Ok(())
     }
 }
 
-impl Compile for MatchEdge {
-    fn compile(&self, code: &mut Vec<Instruction>, env: &mut CompileEnv) -> Result<(), Error> {
-        let start = code.len();
-
-        match self.load {
-            LoadEdge::Origin(node) => {
-                code.push(Instruction::IterOriginEdges(env.get_stack_idx(node)?));
-                code.push(Instruction::NoOp); // set after, since jump position is unknown
-                env.push_edge(self.name);
-            }
-            _ => unimplemented!(),
-        }
-
-        self.next.compile(code, env)?;
-
-        match self.load {
-            LoadEdge::Origin(_) => {
-                env.pop_edge(self.name);
-                code[start + 1] = Instruction::NextEdge(code.len() + 2);
-                code.push(Instruction::PopEdge);
-                code.push(Instruction::Jump(start + 1));
-            }
-            _ => unimplemented!(),
-        }
-
-        Ok(())
+impl QueryPlan {
+    /// TODO: Execution/ Program separate things and return a program here ...
+    pub fn compile(&self) -> Result<Vec<Instruction>, Error> {
+        let mut code = vec![];
+        let mut env = CompileEnv::new();
+        env.compile_step(&mut code, &self.matches)?;
+        code.push(Instruction::Halt);
+        Ok(code)
     }
 }
+
+// impl Compile for MatchNode {
+//     fn compile(&self, code: &mut Vec<Instruction>, env: &mut CompileEnv) -> Result<(), Error> {
+//         let start = code.len();
+
+//         match self.load {
+//             LoadNode::Any => {
+//                 code.push(Instruction::IterNodes);
+//                 code.push(Instruction::NoOp); // set after, since jump position is unknown
+//                 env.push_node(self.name);
+//             }
+//             LoadNode::Target(edge) => {
+//                 code.push(Instruction::LoadTargetNode(env.get_stack_idx(edge)?));
+//                 env.push_node(self.name);
+//             }
+//             _ => unimplemented!(),
+//         }
+
+//         if let Some(next) = &self.next {
+//             next.compile(code, env)?;
+//         } else {
+//             code.push(Instruction::Yield);
+//         }
+
+//         match self.load {
+//             LoadNode::Any => {
+//                 env.pop_node(self.name);
+//                 code[start + 1] = Instruction::NextNode(code.len() + 2);
+//                 code.push(Instruction::PopNode);
+//                 code.push(Instruction::Jump(start + 1));
+//             }
+//             LoadNode::Target(_) => {
+//                 env.pop_node(self.name);
+//                 code.push(Instruction::PopNode);
+//             }
+//             _ => unimplemented!(),
+//         }
+
+//         Ok(())
+//     }
+// }
+
+// impl Compile for MatchEdge {
+//     fn compile(&self, code: &mut Vec<Instruction>, env: &mut CompileEnv) -> Result<(), Error> {
+//         let start = code.len();
+
+//         match self.load {
+//             LoadEdge::Origin(node) => {
+//                 code.push(Instruction::IterOriginEdges(env.get_stack_idx(node)?));
+//                 code.push(Instruction::NoOp); // set after, since jump position is unknown
+//                 env.push_edge(self.name);
+//             }
+//             _ => unimplemented!(),
+//         }
+
+//         self.next.compile(code, env)?;
+
+//         match self.load {
+//             LoadEdge::Origin(_) => {
+//                 env.pop_edge(self.name);
+//                 code[start + 1] = Instruction::NextEdge(code.len() + 2);
+//                 code.push(Instruction::PopEdge);
+//                 code.push(Instruction::Jump(start + 1));
+//             }
+//             _ => unimplemented!(),
+//         }
+
+//         Ok(())
+//     }
+// }
