@@ -1,5 +1,6 @@
 use crate::runtime::Instruction;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Program {
     pub instructions: Vec<Instruction>,
     pub returns: Vec<StackValue>,

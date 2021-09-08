@@ -13,7 +13,7 @@ pub(crate) struct VirtualMachine<'e, 't, 'i> {
     edge_iters: Vec<IndexIter<'t, Txn<&'e Env>>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Instruction {
     /// Does nothing, can be used as a placeholder
     NoOp,

@@ -102,6 +102,7 @@ impl<'stmt, 'txn> Match<'stmt, 'txn> {
     }
 
     pub fn edge(&self, idx: usize) -> Result<&Edge<'txn>, Error> {
+        println!("{:?}", self.stmt.program);
         match self.stmt.program.returns.get(idx) {
             Some(StackValue::Node(_)) => Err(Error::Todo),
             Some(StackValue::Edge(idx)) => Ok(&self.vm.edge_stack[*idx]),

@@ -112,7 +112,7 @@ impl CompileEnv {
                 for value in &plan.returns {
                     self.returns.push(match value {
                         &NamedValue::Node(name) => StackValue::Node(self.get_stack_idx(name)?),
-                        &NamedValue::Edge(name) => StackValue::Node(self.get_stack_idx(name)?),
+                        &NamedValue::Edge(name) => StackValue::Edge(self.get_stack_idx(name)?),
                     });
                 }
             }
