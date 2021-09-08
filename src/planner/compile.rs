@@ -1,13 +1,16 @@
-use crate::runtime::Instruction;
+use crate::runtime::{Instruction, Program, StackValue};
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{MatchStep, QueryPlan};
+use super::plan::{MatchStep, NamedValue, QueryPlan};
 
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
     node_stack_len: usize,
     edge_stack_len: usize,
+
+    instructions: Vec<Instruction>,
+    returns: Vec<StackValue>,
 }
 
 impl CompileEnv {
@@ -16,6 +19,9 @@ impl CompileEnv {
             names: HashMap::new(),
             node_stack_len: 0,
             edge_stack_len: 0,
+
+            instructions: Vec::new(),
+            returns: Vec::new(),
         }
     }
 
@@ -43,77 +49,86 @@ impl CompileEnv {
         self.names.get(&name).map(|idx| *idx).ok_or(Error::Todo)
     }
 
-    fn compile_step(
-        &mut self,
-        code: &mut Vec<Instruction>,
-        steps: &[MatchStep],
-    ) -> Result<(), Error> {
+    fn compile_step(&mut self, plan: &QueryPlan, steps: &[MatchStep]) -> Result<(), Error> {
         if let Some(step) = steps.get(0) {
-            let start = code.len();
+            let start = self.instructions.len();
             match step {
                 MatchStep::LoadAnyNode { name } => {
-                    code.push(Instruction::IterNodes);
-                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.instructions.push(Instruction::IterNodes);
+                    self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_node(*name);
-                    self.compile_step(code, &steps[1..])?;
+                    self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
-                    code.push(Instruction::PopNode);
-                    code.push(Instruction::Jump(start + 1));
-                    code[start + 1] = Instruction::NextNode(code.len());
+                    self.instructions.push(Instruction::PopNode);
+                    self.instructions.push(Instruction::Jump(start + 1));
+                    self.instructions[start + 1] = Instruction::NextNode(self.instructions.len());
                 }
                 MatchStep::LoadTargetNode { name, edge } => {
-                    code.push(Instruction::LoadTargetNode(self.get_stack_idx(*edge)?));
+                    self.instructions
+                        .push(Instruction::LoadTargetNode(self.get_stack_idx(*edge)?));
                     self.push_node(*name);
-                    self.compile_step(code, &steps[1..])?;
+                    self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
-                    code.push(Instruction::PopNode);
+                    self.instructions.push(Instruction::PopNode);
                 }
                 MatchStep::LoadOriginNode { name, edge } => {
-                    code.push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
+                    self.instructions
+                        .push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
                     self.push_node(*name);
-                    self.compile_step(code, &steps[1..])?;
+                    self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
-                    code.push(Instruction::PopNode);
+                    self.instructions.push(Instruction::PopNode);
                 }
 
                 MatchStep::LoadOriginEdge { name, node } => {
-                    code.push(Instruction::IterOriginEdges(self.get_stack_idx(*node)?));
-                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.instructions
+                        .push(Instruction::IterOriginEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_edge(*name);
-                    self.compile_step(code, &steps[1..])?;
+                    self.compile_step(plan, &steps[1..])?;
                     self.pop_edge(*name);
-                    code.push(Instruction::PopEdge);
-                    code.push(Instruction::Jump(start + 1));
-                    code[start + 1] = Instruction::NextEdge(code.len());
+                    self.instructions.push(Instruction::PopEdge);
+                    self.instructions.push(Instruction::Jump(start + 1));
+                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
                 }
                 MatchStep::LoadTargetEdge { name, node } => {
-                    code.push(Instruction::IterTargetEdges(self.get_stack_idx(*node)?));
-                    code.push(Instruction::NoOp); // set after to calc jump
+                    self.instructions
+                        .push(Instruction::IterTargetEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_edge(*name);
-                    self.compile_step(code, &steps[1..])?;
+                    self.compile_step(plan, &steps[1..])?;
                     self.pop_edge(*name);
-                    code.push(Instruction::PopEdge);
-                    code.push(Instruction::Jump(start + 1));
-                    code[start + 1] = Instruction::NextEdge(code.len());
+                    self.instructions.push(Instruction::PopEdge);
+                    self.instructions.push(Instruction::Jump(start + 1));
+                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
                 }
 
                 _ => unimplemented!(),
             }
             Ok(())
         } else {
-            code.push(Instruction::Yield);
+            self.instructions.push(Instruction::Yield);
+            if self.returns.is_empty() {
+                for value in &plan.returns {
+                    self.returns.push(match value {
+                        &NamedValue::Node(name) => StackValue::Node(self.get_stack_idx(name)?),
+                        &NamedValue::Edge(name) => StackValue::Node(self.get_stack_idx(name)?),
+                    });
+                }
+            }
             Ok(())
         }
     }
 }
 
 impl QueryPlan {
-    /// TODO: Execution/ Program separate things and return a program here ...
-    pub fn compile(&self) -> Result<Vec<Instruction>, Error> {
-        let mut code = vec![];
+    pub fn compile(&self) -> Result<Program, Error> {
         let mut env = CompileEnv::new();
-        env.compile_step(&mut code, &self.matches)?;
-        code.push(Instruction::Halt);
-        Ok(code)
+        env.compile_step(&self, &self.matches)?;
+        env.instructions.push(Instruction::Halt);
+        Ok(Program {
+            instructions: env.instructions,
+            returns: env.returns,
+        })
     }
 }

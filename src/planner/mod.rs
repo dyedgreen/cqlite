@@ -66,6 +66,6 @@ mod tests {
             ]
         };
 
-        assert_eq!(code, plan.compile().unwrap());
+        assert_eq!(code, plan.compile().unwrap().instructions);
     }
 }

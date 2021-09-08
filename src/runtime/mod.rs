@@ -1,17 +1,8 @@
 mod program;
 mod vm;
 
+pub(crate) use program::{Program, StackValue};
 pub(crate) use vm::{Instruction, Status, VirtualMachine};
-
-pub(crate) struct Program {
-    instructions: Vec<Instruction>,
-}
-
-impl Program {
-    pub fn new(instructions: Vec<Instruction>) -> Self {
-        Self { instructions }
-    }
-}
 
 #[cfg(test)]
 mod tests {

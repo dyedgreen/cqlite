@@ -27,3 +27,6 @@ database.
 
 Uses a disc-backed `btree` to provide basic storage, iteration and lockup for nodes and
 edges.
+
+## Crate list (for later reference)
+- https://docs.rs/smallvec/1.6.1/smallvec/index.html

@@ -23,7 +23,7 @@ pub(crate) struct Store {
     pub env: Env,
 }
 
-pub(crate) struct StoreTxn<'a> {
+pub struct StoreTxn<'a> {
     pub txn: Txn<&'a Env>,
     // node and edges storage
     pub nodes: UDb<u64, [u8]>, // FIXME: having these be optional is really annoying ...
@@ -33,7 +33,7 @@ pub(crate) struct StoreTxn<'a> {
     pub targets: Db<u64, u64>,
 }
 
-pub(crate) struct MutStoreTxn<'a> {
+pub struct MutStoreTxn<'a> {
     pub txn: MutTxn<&'a Env, ()>,
     // node and edges storage
     pub nodes: UDb<u64, [u8]>,
