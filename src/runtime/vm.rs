@@ -2,15 +2,16 @@ use crate::store::{Edge, IndexIter, Node, StoreTxn, ValueIter};
 use crate::Error;
 use sanakirja::{Env, Txn};
 
-pub(crate) struct VirtualMachine<'e, 't, 'i> {
-    txn: &'t StoreTxn<'e>,
-    instructions: &'i [Instruction],
+pub(crate) struct VirtualMachine<'env, 'txn, 'inst> {
+    txn: &'txn StoreTxn<'env>,
+
+    instructions: &'inst [Instruction],
     current_inst: usize,
 
-    pub(crate) node_stack: Vec<Node<'t>>,
-    pub(crate) edge_stack: Vec<Edge<'t>>,
-    node_iters: Vec<ValueIter<'t, Txn<&'e Env>, Node<'t>>>,
-    edge_iters: Vec<IndexIter<'t, Txn<&'e Env>>>,
+    pub(crate) node_stack: Vec<Node<'txn>>,
+    pub(crate) edge_stack: Vec<Edge<'txn>>,
+    node_iters: Vec<ValueIter<'txn, Txn<&'env Env>, Node<'txn>>>,
+    edge_iters: Vec<IndexIter<'txn, Txn<&'env Env>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,14 +39,14 @@ pub(crate) enum Instruction {
     PopNode,
     PopEdge,
 }
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
     Yield,
     Halt,
 }
 
-impl<'e, 't, 'i> VirtualMachine<'e, 't, 'i> {
-    pub fn new(txn: &'t StoreTxn<'e>, instructions: &'i [Instruction]) -> Self {
+impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
+    pub fn new(txn: &'txn StoreTxn<'env>, instructions: &'inst [Instruction]) -> Self {
         Self {
             txn,
             instructions,
@@ -148,8 +149,8 @@ impl<'e, 't, 'i> VirtualMachine<'e, 't, 'i> {
     }
 }
 
-impl<'e, 't, 'i> std::fmt::Debug for VirtualMachine<'e, 't, 'i> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'env, 'txn, 'inst> std::fmt::Debug for VirtualMachine<'env, 'txn, 'inst> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Program")
             .field("current_inst", &self.current_inst)
             .field("instructions", &self.instructions)

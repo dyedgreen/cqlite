@@ -14,23 +14,32 @@ pub(crate) mod store;
 
 pub use error::Error;
 
+/// TODO: A handle to the database
 pub struct Graph {
     store: Store,
 }
 
+/// TODO: Handle read/ write transactions in VM ...
+/// either with generics or with an enum (?)
+pub struct Txn<'graph>(StoreTxn<'graph>);
+
+/// TODO: A prepared statement
 pub struct Statement<'graph> {
-    store: &'graph Store,
+    graph: &'graph Graph,
     program: Program,
 }
 
-pub struct Matches<'stmt, 'txn> {
+/// TODO: A running query, the same statement
+/// can be run concurrently ...
+pub struct Query<'stmt, 'txn> {
     stmt: &'stmt Statement<'stmt>,
-    vm: VirtualMachine<'txn, 'txn, 'txn>,
+    vm: VirtualMachine<'stmt, 'txn, 'stmt>,
 }
 
-pub struct Match<'stmt, 'txn> {
-    stmt: &'stmt Statement<'stmt>,
-    vm: &'txn VirtualMachine<'txn, 'txn, 'txn>,
+/// TODO: A guard to access a set of matched
+/// nodes and edges
+pub struct Match<'query> {
+    query: &'query Query<'query, 'query>,
 }
 
 impl Graph {
@@ -51,61 +60,58 @@ impl Graph {
         // plan.optimize();
         let program = plan.compile()?;
         Ok(Statement {
-            store: &self.store,
+            graph: self,
             program,
         })
     }
 
-    pub fn txn(&self) -> Result<StoreTxn, Error> {
-        self.store.txn()
+    pub fn txn(&self) -> Result<Txn, Error> {
+        Ok(Txn(self.store.txn()?))
     }
 }
 
 impl<'graph> Statement<'graph> {
     pub fn query<'stmt, 'txn>(
-        &'txn self,
-        txn: &'txn StoreTxn<'stmt>,
-    ) -> Result<Matches<'txn, 'txn>, Error> {
-        Ok(Matches {
+        &'stmt self,
+        txn: &'txn Txn<'stmt>,
+    ) -> Result<Query<'stmt, 'txn>, Error> {
+        Ok(Query {
             stmt: self,
-            vm: VirtualMachine::new(txn, self.program.instructions.as_slice()),
+            vm: VirtualMachine::new(&txn.0, self.program.instructions.as_slice()),
         })
     }
 
     pub fn execute(&self) -> Result<(), Error> {
-        let txn = self.store.txn()?;
+        let txn = self.graph.txn()?;
         self.query(&txn)?;
         Ok(())
     }
 }
 
-impl<'stmt, 'txn> Matches<'stmt, 'txn> {
+impl<'stmt, 'txn> Query<'stmt, 'txn> {
     #[inline]
-    pub fn next<'m>(&'m mut self) -> Result<Option<Match<'m, 'm>>, Error> {
+    pub fn step(&mut self) -> Result<Option<Match>, Error> {
         match self.vm.run()? {
-            Status::Yield => Ok(Some(Match {
-                stmt: self.stmt,
-                vm: &self.vm,
-            })),
+            Status::Yield => Ok(Some(Match { query: self })),
             Status::Halt => Ok(None),
         }
     }
 }
 
-impl<'stmt, 'txn> Match<'stmt, 'txn> {
-    pub fn node(&self, idx: usize) -> Result<&Node<'txn>, Error> {
-        match self.stmt.program.returns.get(idx) {
-            Some(StackValue::Node(idx)) => Ok(&self.vm.node_stack[*idx]),
+impl<'query> Match<'query> {
+    pub fn node(&self, idx: usize) -> Result<&Node<'query>, Error> {
+        match self.query.stmt.program.returns.get(idx) {
+            Some(StackValue::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
             Some(StackValue::Edge(_)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
 
-    pub fn edge(&self, idx: usize) -> Result<&Edge<'txn>, Error> {
-        println!("{:?}", self.stmt.program);
-        match self.stmt.program.returns.get(idx) {
+    pub fn edge(&self, idx: usize) -> Result<&Edge<'query>, Error> {
+        println!("{:?}", self.query.stmt.program);
+        match self.query.stmt.program.returns.get(idx) {
             Some(StackValue::Node(_)) => Err(Error::Todo),
-            Some(StackValue::Edge(idx)) => Ok(&self.vm.edge_stack[*idx]),
+            Some(StackValue::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
             None => Err(Error::Todo),
         }
     }
@@ -133,16 +139,16 @@ mod tests {
         let txn = graph.txn().unwrap();
         let mut matches = stmt.query(&txn).unwrap();
 
-        let result = matches.next().unwrap().unwrap();
+        let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().kind);
         assert_eq!("PERSON_B", result.node(1).unwrap().kind);
         assert_eq!("KNOWS", result.edge(2).unwrap().kind);
 
-        let result = matches.next().unwrap().unwrap();
+        let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_B", result.node(0).unwrap().kind);
         assert_eq!("PERSON_A", result.node(1).unwrap().kind);
         assert_eq!("KNOWS", result.edge(2).unwrap().kind);
 
-        assert!(matches.next().unwrap().is_none());
+        assert!(matches.step().unwrap().is_none());
     }
 }
