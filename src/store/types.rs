@@ -50,8 +50,7 @@ impl<'a> Node<'a> {
         self.id
     }
 
-    /// TODO: Rename 'label'?
-    pub fn kind(&self) -> &'a str {
+    pub fn label(&self) -> &'a str {
         self.kind
     }
 
@@ -70,8 +69,7 @@ impl<'a> Edge<'a> {
         self.id
     }
 
-    /// TODO: Rename 'label'?
-    pub fn kind(&self) -> &'a str {
+    pub fn label(&self) -> &'a str {
         self.kind
     }
 

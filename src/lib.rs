@@ -68,6 +68,20 @@ impl Graph {
     pub fn txn(&self) -> Result<Txn, Error> {
         Ok(Txn(self.store.txn()?))
     }
+
+    pub fn delete_me_build_test_graph(&self) -> Result<(), Error> {
+        let mut txn = self.store.mut_txn()?;
+
+        let a = txn.create_node("PERSON")?.id;
+        let b = txn.create_node("PERSON")?.id;
+
+        txn.create_edge("KNOWS", a, b)?;
+        txn.create_edge("HEARD_OF", b, a)?;
+
+        txn.commit()?;
+
+        Ok(())
+    }
 }
 
 impl<'graph> Statement<'graph> {
