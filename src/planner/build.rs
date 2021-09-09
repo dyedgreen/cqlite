@@ -113,7 +113,10 @@ impl QueryPlan {
                                 name,
                                 node: prev_node_name,
                             }),
-                            ast::Direction::Either => unimplemented!(),
+                            ast::Direction::Either => matches.push(MatchStep::LoadEitherEdge {
+                                name,
+                                node: prev_node_name,
+                            }),
                         }
                         name
                     }
@@ -128,7 +131,10 @@ impl QueryPlan {
                             name,
                             node: prev_node_name,
                         }),
-                        ast::Direction::Either => unimplemented!(),
+                        ast::Direction::Either => matches.push(MatchStep::LoadEitherEdge {
+                            name,
+                            node: prev_node_name,
+                        }),
                     }
                     name
                 };
@@ -158,7 +164,11 @@ impl QueryPlan {
                                 name,
                                 edge: edge_name,
                             }),
-                            ast::Direction::Either => unimplemented!(),
+                            ast::Direction::Either => matches.push(MatchStep::LoadOtherNode {
+                                name,
+                                node: prev_node_name,
+                                edge: edge_name,
+                            }),
                         }
                         name
                     }
@@ -173,7 +183,11 @@ impl QueryPlan {
                             name,
                             edge: edge_name,
                         }),
-                        ast::Direction::Either => unimplemented!(),
+                        ast::Direction::Either => matches.push(MatchStep::LoadOtherNode {
+                            name,
+                            node: prev_node_name,
+                            edge: edge_name,
+                        }),
                     }
                     name
                 };

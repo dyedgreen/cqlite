@@ -63,6 +63,14 @@ impl CompileEnv {
                     self.instructions.push(Instruction::Jump(start + 1));
                     self.instructions[start + 1] = Instruction::NextNode(self.instructions.len());
                 }
+                MatchStep::LoadOriginNode { name, edge } => {
+                    self.instructions
+                        .push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
+                    self.push_node(*name);
+                    self.compile_step(plan, &steps[1..])?;
+                    self.pop_node(*name);
+                    self.instructions.push(Instruction::PopNode);
+                }
                 MatchStep::LoadTargetNode { name, edge } => {
                     self.instructions
                         .push(Instruction::LoadTargetNode(self.get_stack_idx(*edge)?));
@@ -71,9 +79,11 @@ impl CompileEnv {
                     self.pop_node(*name);
                     self.instructions.push(Instruction::PopNode);
                 }
-                MatchStep::LoadOriginNode { name, edge } => {
-                    self.instructions
-                        .push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
+                MatchStep::LoadOtherNode { name, node, edge } => {
+                    self.instructions.push(Instruction::LoadOtherNode(
+                        self.get_stack_idx(*node)?,
+                        self.get_stack_idx(*edge)?,
+                    ));
                     self.push_node(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
@@ -102,8 +112,20 @@ impl CompileEnv {
                     self.instructions.push(Instruction::Jump(start + 1));
                     self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
                 }
+                MatchStep::LoadEitherEdge { name, node } => {
+                    self.instructions
+                        .push(Instruction::IterBothEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::NoOp); // set after to calc jump
+                    self.push_edge(*name);
+                    self.compile_step(plan, &steps[1..])?;
+                    self.pop_edge(*name);
+                    self.instructions.push(Instruction::PopEdge);
+                    self.instructions.push(Instruction::Jump(start + 1));
+                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
+                }
 
-                _ => unimplemented!(),
+                MatchStep::FilterIsOrigin { .. } => unimplemented!(),
+                MatchStep::FilterIsTarget { .. } => unimplemented!(),
             }
             Ok(())
         } else {
@@ -111,8 +133,8 @@ impl CompileEnv {
             if self.returns.is_empty() {
                 for value in &plan.returns {
                     self.returns.push(match value {
-                        &NamedValue::Node(name) => StackValue::Node(self.get_stack_idx(name)?),
-                        &NamedValue::Edge(name) => StackValue::Edge(self.get_stack_idx(name)?),
+                        NamedValue::Node(name) => StackValue::Node(self.get_stack_idx(*name)?),
+                        NamedValue::Edge(name) => StackValue::Edge(self.get_stack_idx(*name)?),
                     });
                 }
             }

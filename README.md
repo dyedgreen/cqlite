@@ -28,5 +28,14 @@ database.
 Uses a disc-backed `btree` to provide basic storage, iteration and lockup for nodes and
 edges.
 
+## TODO List
+
+- [ ] match either left / right
+- [ ] match edge/ node kinds ...
+- [ ] WHERE clauses
+- [ ] test mutli match
+- [ ] CREATE / DELETE / SET clauses -> figure out how to handle transactions ...
+
 ## Crate list (for later reference)
+- https://crates.io/crates/thiserror
 - https://docs.rs/smallvec/1.6.1/smallvec/index.html

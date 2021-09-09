@@ -1,13 +1,13 @@
 use crate::Error;
-use sanakirja::btree::{Db, UDb};
+use sanakirja::btree::UDb;
 use sanakirja::{btree, Commit, Env, MutTxn, RootDb, Storable, Txn, UnsizedStorable};
 use std::path::Path;
 
 mod iter;
 mod types;
 
-pub use iter::{IndexIter, ValueIter};
-pub use types::{Edge, Node};
+pub(crate) use iter::{EdgeIter, ValueIter};
+pub use types::{Edge, Node, OwnedEdge, OwnedNode};
 
 // alloc the pages to write to
 // them every time ... You can free them
@@ -16,8 +16,6 @@ pub use types::{Edge, Node};
 const ID_SQUENCE: usize = 0;
 const DB_NODES: usize = 1;
 const DB_EDGES: usize = 2;
-const DB_EDGE_ORIGINS: usize = 3;
-const DB_EDGE_TARGETS: usize = 4;
 
 pub(crate) struct Store {
     pub env: Env,
@@ -25,22 +23,16 @@ pub(crate) struct Store {
 
 pub(crate) struct StoreTxn<'a> {
     pub txn: Txn<&'a Env>,
-    // node and edges storage
-    pub nodes: UDb<u64, [u8]>, // FIXME: having these be optional is really annoying ...
+
+    pub nodes: UDb<u64, [u8]>,
     pub edges: UDb<u64, [u8]>,
-    // maps from nodes to edges
-    pub origins: Db<u64, u64>,
-    pub targets: Db<u64, u64>,
 }
 
 pub(crate) struct MutStoreTxn<'a> {
     pub txn: MutTxn<&'a Env, ()>,
-    // node and edges storage
+
     pub nodes: UDb<u64, [u8]>,
     pub edges: UDb<u64, [u8]>,
-    // maps from nodes to edges
-    pub origins: Db<u64, u64>,
-    pub targets: Db<u64, u64>,
 }
 
 impl Store {
@@ -65,30 +57,14 @@ impl Store {
         let mut txn = Env::mut_txn_begin(&self.env)?;
         let nodes = Self::get_buffer_db(&mut txn, DB_NODES)?;
         let edges = Self::get_buffer_db(&mut txn, DB_EDGES)?;
-        let origins = Self::get_db(&mut txn, DB_EDGE_ORIGINS)?;
-        let targets = Self::get_db(&mut txn, DB_EDGE_TARGETS)?;
-        Ok(MutStoreTxn {
-            txn,
-            nodes,
-            edges,
-            origins,
-            targets,
-        })
+        Ok(MutStoreTxn { txn, nodes, edges })
     }
 
     pub fn txn(&self) -> Result<StoreTxn, Error> {
         let txn = Env::txn_begin(&self.env)?;
         let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
         let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
-        let origins = txn.root_db(DB_EDGE_ORIGINS).ok_or(Error::Todo)?;
-        let targets = txn.root_db(DB_EDGE_TARGETS).ok_or(Error::Todo)?;
-        Ok(StoreTxn {
-            txn,
-            nodes,
-            edges,
-            origins,
-            targets,
-        })
+        Ok(StoreTxn { txn, nodes, edges })
     }
 
     fn get_db<K, V>(
@@ -152,13 +128,13 @@ impl<'e> MutStoreTxn<'e> {
         id
     }
 
-    pub fn create_node<'t>(&'t mut self, kind: &str) -> Result<Node<'t>, Error> {
+    pub fn create_node(&mut self, kind: &str) -> Result<Node, Error> {
         let node = Node {
             id: self.id_seq(),
             kind,
+            origins: Vec::new(),
+            targets: Vec::new(),
         };
-        // TODO: This can avoid allocating the vector by implementing
-        // UnsizedStorabe directly ...
         let node_bytes = bincode::serialize(&node)?;
         btree::put(
             &mut self.txn,
@@ -170,20 +146,43 @@ impl<'e> MutStoreTxn<'e> {
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
     }
 
-    pub fn unchecked_create_edge<'t>(
-        &'t mut self,
-        kind: &str,
-        origin: u64,
-        target: u64,
-    ) -> Result<Node<'t>, Error> {
+    pub fn update_node(&mut self, node: &OwnedNode) -> Result<(), Error> {
+        let node_bytes = bincode::serialize(&node)?;
+        btree::del(&mut self.txn, &mut self.nodes, &node.id, None)?;
+        btree::put(
+            &mut self.txn,
+            &mut self.nodes,
+            &node.id,
+            node_bytes.as_ref(),
+        )?;
+        Ok(())
+    }
+
+    pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
+        let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
+        if let Some((_, bytes)) = entry {
+            let node = bincode::deserialize(bytes.as_ref())?;
+            Ok(Some(node))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn create_edge(&mut self, kind: &str, origin: u64, target: u64) -> Result<Edge, Error> {
         let edge = Edge {
             id: self.id_seq(),
             kind,
             origin,
             target,
         };
-        // TODO: This can avoid allocating the vector by implementing
-        // UnsizedStorabe directly ...
+
+        let mut origin = self.get_node(origin)?.ok_or(Error::Todo)?.owned();
+        origin.origins.push(edge.id);
+        self.update_node(&origin)?;
+        let mut target = self.get_node(target)?.ok_or(Error::Todo)?.owned();
+        target.targets.push(edge.id);
+        self.update_node(&target)?;
+
         let edge_bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
         btree::put(
             &mut self.txn,
@@ -191,32 +190,14 @@ impl<'e> MutStoreTxn<'e> {
             &edge.id,
             edge_bytes.as_ref(),
         )?;
-        btree::put(&mut self.txn, &mut self.origins, &origin, &edge.id)?;
-        btree::put(&mut self.txn, &mut self.targets, &target, &edge.id)?;
+
         let entry = btree::get(&self.txn, &self.edges, &edge.id, None)?.ok_or(Error::Todo)?;
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
-    }
-
-    pub fn create_edge<'t>(
-        &'t mut self,
-        kind: &str,
-        origin: u64,
-        target: u64,
-    ) -> Result<Node<'t>, Error> {
-        let origin_exists = btree::get(&self.txn, &self.nodes, &origin, None)?.is_some();
-        let target_exists = btree::get(&self.txn, &self.nodes, &target, None)?.is_some();
-        if origin_exists && target_exists {
-            self.unchecked_create_edge(kind, origin, target)
-        } else {
-            Err(Error::Todo)
-        }
     }
 
     pub fn commit(mut self) -> Result<(), sanakirja::Error> {
         self.txn.set_root(DB_NODES, self.nodes.db);
         self.txn.set_root(DB_EDGES, self.edges.db);
-        self.txn.set_root(DB_EDGE_ORIGINS, self.origins.db);
-        self.txn.set_root(DB_EDGE_TARGETS, self.targets.db);
         self.txn.commit()
     }
 }

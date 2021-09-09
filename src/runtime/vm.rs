@@ -1,4 +1,4 @@
-use crate::store::{Edge, IndexIter, Node, StoreTxn, ValueIter};
+use crate::store::{Edge, EdgeIter, Node, StoreTxn, ValueIter};
 use crate::Error;
 use sanakirja::{Env, Txn};
 
@@ -11,7 +11,7 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'inst> {
     pub(crate) node_stack: Vec<Node<'txn>>,
     pub(crate) edge_stack: Vec<Edge<'txn>>,
     node_iters: Vec<ValueIter<'txn, Txn<&'env Env>, Node<'txn>>>,
-    edge_iters: Vec<IndexIter<'txn, Txn<&'env Env>>>,
+    edge_iters: Vec<EdgeIter>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,15 +26,18 @@ pub(crate) enum Instruction {
     /// Exists the program
     Halt,
 
-    IterNodes,              // iter all nodes
+    IterNodes, // iter all nodes
+
     IterOriginEdges(usize), // iter edges originating from given node in stack
     IterTargetEdges(usize), // iter edges terminating at given node in stack
+    IterBothEdges(usize),   // iter all edges for given node in stack
 
     NextNode(usize), // push next node to stack or pop iterator and jump
     NextEdge(usize), // push next edge to stack or pop iterator and jump
 
-    LoadOriginNode(usize), // push origin node of edge to stack
-    LoadTargetNode(usize), // push target node of edge to stack
+    LoadOriginNode(usize),       // push origin node of edge to stack
+    LoadTargetNode(usize),       // push target node of edge to stack
+    LoadOtherNode(usize, usize), // load the partner of a (node, edge) pair
 
     PopNode,
     PopEdge,
@@ -82,22 +85,20 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                         .push(ValueIter::new(&self.txn.txn, &self.txn.nodes, None)?);
                     self.current_inst += 1;
                 }
+
                 Instruction::IterOriginEdges(node) => {
-                    let node_id = self.node_stack[node].id;
-                    self.edge_iters.push(IndexIter::new(
-                        &self.txn.txn,
-                        &self.txn.origins,
-                        node_id,
-                    )?);
+                    let node = &self.node_stack[node];
+                    self.edge_iters.push(EdgeIter::origins(node));
                     self.current_inst += 1;
                 }
                 Instruction::IterTargetEdges(node) => {
-                    let node_id = self.node_stack[node].id;
-                    self.edge_iters.push(IndexIter::new(
-                        &self.txn.txn,
-                        &self.txn.targets,
-                        node_id,
-                    )?);
+                    let node = &self.node_stack[node];
+                    self.edge_iters.push(EdgeIter::targets(node));
+                    self.current_inst += 1;
+                }
+                Instruction::IterBothEdges(node) => {
+                    let node = &self.node_stack[node];
+                    self.edge_iters.push(EdgeIter::both(node));
                     self.current_inst += 1;
                 }
 
@@ -115,7 +116,7 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                     let iter = self.edge_iters.last_mut().unwrap();
                     if let Some(edge_id) = iter.next() {
                         self.edge_stack
-                            .push(self.txn.get_edge(edge_id?)?.ok_or(Error::Todo)?);
+                            .push(self.txn.get_edge(edge_id)?.ok_or(Error::Todo)?);
                         self.current_inst += 1;
                     } else {
                         self.edge_iters.pop();
@@ -133,6 +134,17 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                     let edge = &self.edge_stack[edge];
                     let node = self.txn.get_node(edge.target)?.ok_or(Error::Todo)?;
                     self.node_stack.push(node);
+                    self.current_inst += 1;
+                }
+                Instruction::LoadOtherNode(node, edge) => {
+                    let node = &self.node_stack[node];
+                    let edge = &self.edge_stack[edge];
+                    let other = if edge.target == node.id {
+                        self.txn.get_node(edge.origin)?.ok_or(Error::Todo)?
+                    } else {
+                        self.txn.get_node(edge.target)?.ok_or(Error::Todo)?
+                    };
+                    self.node_stack.push(other);
                     self.current_inst += 1;
                 }
 
