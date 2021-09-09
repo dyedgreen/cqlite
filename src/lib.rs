@@ -108,7 +108,6 @@ impl<'query> Match<'query> {
     }
 
     pub fn edge(&self, idx: usize) -> Result<&Edge<'query>, Error> {
-        println!("{:?}", self.query.stmt.program);
         match self.query.stmt.program.returns.get(idx) {
             Some(StackValue::Node(_)) => Err(Error::Todo),
             Some(StackValue::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
@@ -176,6 +175,68 @@ mod tests {
         assert_eq!("PERSON_B", result.node(0).unwrap().kind);
         assert_eq!("PERSON_A", result.node(1).unwrap().kind);
         assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_a_to_a() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let a = txn.create_node("PERSON_A").unwrap().id;
+        let b = txn.create_node("PERSON_B").unwrap().id;
+        txn.create_edge("KNOWS", a, a).unwrap();
+        txn.create_edge("KNOWS", b, b).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&txn).unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_a_edge_a() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let a = txn.create_node("PERSON_A").unwrap().id;
+        let b = txn.create_node("PERSON_B").unwrap().id;
+        txn.create_edge("KNOWS", a, a).unwrap();
+        txn.create_edge("KNOWS", b, b).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&txn).unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
+        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
 
         assert!(matches.step().unwrap().is_none());
     }

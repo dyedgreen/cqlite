@@ -2,7 +2,7 @@ use crate::runtime::{Instruction, Program, StackValue};
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{MatchStep, NamedValue, QueryPlan};
+use super::plan::{Filter, MatchStep, NamedValue, QueryPlan};
 
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
@@ -47,6 +47,76 @@ impl CompileEnv {
 
     fn get_stack_idx(&self, name: usize) -> Result<usize, Error> {
         self.names.get(&name).map(|idx| *idx).ok_or(Error::Todo)
+    }
+
+    fn adjust_jumps(instructions: &mut [Instruction], from: usize, to: usize) {
+        for inst in instructions {
+            use Instruction::*;
+            match inst {
+                Jump(t)
+                | NextNode(t)
+                | NextEdge(t)
+                | CheckIsOrigin(t, _, _)
+                | CheckIsTarget(t, _, _) => {
+                    if *t == from {
+                        *t = to;
+                    }
+                }
+                NoOp
+                | Yield
+                | Halt
+                | IterNodes
+                | IterOriginEdges(_)
+                | IterTargetEdges(_)
+                | IterBothEdges(_)
+                | LoadOriginNode(_)
+                | LoadTargetNode(_)
+                | LoadOtherNode(_, _)
+                | PopNode
+                | PopEdge => (),
+            }
+        }
+    }
+
+    /// Uses `usize::MAX` as a place-holder for the failed condition jump to
+    /// be replaced after the position is known.
+    fn compile_filter(&mut self, plan: &QueryPlan, filter: &Filter) -> Result<(), Error> {
+        match filter {
+            Filter::And(a, b) => {
+                self.compile_filter(plan, a)?;
+                self.compile_filter(plan, b)?;
+            }
+            Filter::Or(a, b) => {
+                let start = self.instructions.len();
+                self.compile_filter(plan, a)?;
+                let inner_jmp = self.instructions.len();
+                Self::adjust_jumps(&mut self.instructions[start..], usize::MAX, inner_jmp + 1);
+                self.instructions.push(Instruction::NoOp);
+                self.compile_filter(plan, b)?;
+                self.instructions[inner_jmp] = Instruction::Jump(self.instructions.len());
+            }
+            Filter::Not(inner) => {
+                let start = self.instructions.len();
+                self.compile_filter(plan, inner)?;
+                let end = self.instructions.len();
+                Self::adjust_jumps(&mut self.instructions[start..], usize::MAX, end + 1);
+                self.instructions.push(Instruction::Jump(usize::MAX));
+            }
+
+            Filter::IsOrigin { node, edge } => {
+                let node = self.get_stack_idx(*node)?;
+                let edge = self.get_stack_idx(*edge)?;
+                self.instructions
+                    .push(Instruction::CheckIsOrigin(usize::MAX, node, edge))
+            }
+            Filter::IsTarget { node, edge } => {
+                let node = self.get_stack_idx(*node)?;
+                let edge = self.get_stack_idx(*edge)?;
+                self.instructions
+                    .push(Instruction::CheckIsTarget(usize::MAX, node, edge))
+            }
+        }
+        Ok(())
     }
 
     fn compile_step(&mut self, plan: &QueryPlan, steps: &[MatchStep]) -> Result<(), Error> {
@@ -124,8 +194,13 @@ impl CompileEnv {
                     self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
                 }
 
-                MatchStep::FilterIsOrigin { .. } => unimplemented!(),
-                MatchStep::FilterIsTarget { .. } => unimplemented!(),
+                MatchStep::Filter(filter) => {
+                    self.compile_filter(plan, filter)?;
+                    let filter_end = self.instructions.len();
+                    self.compile_step(plan, &steps[1..])?;
+                    let end = self.instructions.len();
+                    Self::adjust_jumps(&mut self.instructions[start..filter_end], usize::MAX, end);
+                }
             }
             Ok(())
         } else {

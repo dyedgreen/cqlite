@@ -46,6 +46,15 @@ pub struct OwnedEdge {
 }
 
 impl<'a> Node<'a> {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// TODO: Rename 'label'?
+    pub fn kind(&self) -> &'a str {
+        self.kind
+    }
+
     pub(crate) fn owned(&self) -> OwnedNode {
         OwnedNode {
             id: self.id,
@@ -57,6 +66,15 @@ impl<'a> Node<'a> {
 }
 
 impl<'a> Edge<'a> {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// TODO: Rename 'label'?
+    pub fn kind(&self) -> &'a str {
+        self.kind
+    }
+
     pub(crate) fn owned(&self) -> OwnedEdge {
         OwnedEdge {
             id: self.id,

@@ -16,14 +16,10 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'inst> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Instruction {
-    /// Does nothing, can be used as a placeholder
     NoOp,
 
-    /// Set the instruction pointer
     Jump(usize),
-    /// Yields the interpreter, nodes and edges are ready for return
     Yield,
-    /// Exists the program
     Halt,
 
     IterNodes, // iter all nodes
@@ -41,6 +37,11 @@ pub(crate) enum Instruction {
 
     PopNode,
     PopEdge,
+
+    // TODO: this *could* be optimized as follows: do a fixed offset jump, so only
+    // two usize are needed for each instruction ...
+    CheckIsOrigin(usize, usize, usize), // given (jump, node, edge), jump if node is not edge origin
+    CheckIsTarget(usize, usize, usize), // given (jump, node, edge), jump if node is not edge target
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -155,6 +156,25 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                 Instruction::PopEdge => {
                     self.edge_stack.pop();
                     self.current_inst += 1;
+                }
+
+                Instruction::CheckIsOrigin(jump, node, edge) => {
+                    let node = &self.node_stack[node];
+                    let edge = &self.edge_stack[edge];
+                    if node.id == edge.origin {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = jump;
+                    }
+                }
+                Instruction::CheckIsTarget(jump, node, edge) => {
+                    let node = &self.node_stack[node];
+                    let edge = &self.edge_stack[edge];
+                    if node.id == edge.target {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = jump;
+                    }
                 }
             }
         }

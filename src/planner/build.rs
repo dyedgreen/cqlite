@@ -2,7 +2,7 @@ use crate::parser::ast;
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{MatchStep, NamedValue, QueryPlan};
+use super::plan::{Filter, MatchStep, NamedValue, QueryPlan};
 
 pub(crate) struct BuildEnv<'a> {
     names: HashMap<&'a str, NamedValue>,
@@ -91,15 +91,28 @@ impl QueryPlan {
                 let edge_name = if let Some(name) = edge.label.name {
                     if let Some(name) = env.get_edge(name)? {
                         match edge.direction {
-                            ast::Direction::Left => matches.push(MatchStep::FilterIsTarget {
-                                node: prev_node_name,
-                                edge: name,
-                            }),
-                            ast::Direction::Right => matches.push(MatchStep::FilterIsOrigin {
-                                node: prev_node_name,
-                                edge: name,
-                            }),
-                            ast::Direction::Either => unimplemented!(),
+                            ast::Direction::Left => {
+                                matches.push(MatchStep::Filter(Filter::IsTarget {
+                                    node: prev_node_name,
+                                    edge: name,
+                                }))
+                            }
+                            ast::Direction::Right => {
+                                matches.push(MatchStep::Filter(Filter::IsOrigin {
+                                    node: prev_node_name,
+                                    edge: name,
+                                }))
+                            }
+                            ast::Direction::Either => matches.push(MatchStep::Filter(Filter::or(
+                                Filter::IsOrigin {
+                                    node: prev_node_name,
+                                    edge: name,
+                                },
+                                Filter::IsTarget {
+                                    node: prev_node_name,
+                                    edge: name,
+                                },
+                            ))),
                         }
                         name
                     } else {
@@ -142,15 +155,40 @@ impl QueryPlan {
                 prev_node_name = if let Some(name) = node.label.name {
                     if let Some(name) = env.get_node(name)? {
                         match edge.direction {
-                            ast::Direction::Left => matches.push(MatchStep::FilterIsOrigin {
-                                node: name,
-                                edge: edge_name,
-                            }),
-                            ast::Direction::Right => matches.push(MatchStep::FilterIsTarget {
-                                node: name,
-                                edge: edge_name,
-                            }),
-                            ast::Direction::Either => unimplemented!(),
+                            ast::Direction::Left => {
+                                matches.push(MatchStep::Filter(Filter::IsOrigin {
+                                    node: name,
+                                    edge: edge_name,
+                                }))
+                            }
+                            ast::Direction::Right => {
+                                matches.push(MatchStep::Filter(Filter::IsTarget {
+                                    node: name,
+                                    edge: edge_name,
+                                }))
+                            }
+                            ast::Direction::Either => matches.push(MatchStep::Filter(Filter::or(
+                                Filter::and(
+                                    Filter::IsOrigin {
+                                        node: name,
+                                        edge: edge_name,
+                                    },
+                                    Filter::IsTarget {
+                                        node: prev_node_name,
+                                        edge: edge_name,
+                                    },
+                                ),
+                                Filter::and(
+                                    Filter::IsTarget {
+                                        node: name,
+                                        edge: edge_name,
+                                    },
+                                    Filter::IsOrigin {
+                                        node: prev_node_name,
+                                        edge: edge_name,
+                                    },
+                                ),
+                            ))),
                         }
                         name
                     } else {
