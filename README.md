@@ -30,7 +30,7 @@ edges.
 
 ## TODO List
 
-- [ ] match either left / right
+- [x] match either left / right
 - [ ] match edge/ node kinds ...
 - [ ] WHERE clauses
 - [ ] test mutli match

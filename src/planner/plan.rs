@@ -32,6 +32,8 @@ pub(crate) enum Filter {
 
     IsOrigin { node: usize, edge: usize },
     IsTarget { node: usize, edge: usize },
+    NodeHasKind { node: usize, kind: String },
+    EdgeHasKind { edge: usize, kind: String },
 }
 
 impl Filter {

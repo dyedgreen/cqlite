@@ -69,8 +69,6 @@ impl QueryPlan {
         let mut matches = vec![];
 
         for clause in &query.match_clauses {
-            assert!(clause.start.label.kind.is_none()); // TODO
-
             let mut prev_node_name = if let Some(name) = clause.start.label.name {
                 if let Some(name) = env.get_node(name)? {
                     name
@@ -85,9 +83,14 @@ impl QueryPlan {
                 name
             };
 
-            for (edge, node) in &clause.edges {
-                assert!(edge.label.kind.is_none()); // TODO
+            if let Some(kind) = clause.start.label.kind {
+                matches.push(MatchStep::Filter(Filter::NodeHasKind {
+                    node: prev_node_name,
+                    kind: kind.to_string(),
+                }));
+            }
 
+            for (edge, node) in &clause.edges {
                 let edge_name = if let Some(name) = edge.label.name {
                     if let Some(name) = env.get_edge(name)? {
                         match edge.direction {
@@ -151,6 +154,13 @@ impl QueryPlan {
                     }
                     name
                 };
+
+                if let Some(kind) = edge.label.kind {
+                    matches.push(MatchStep::Filter(Filter::EdgeHasKind {
+                        edge: edge_name,
+                        kind: kind.to_string(),
+                    }));
+                }
 
                 prev_node_name = if let Some(name) = node.label.name {
                     if let Some(name) = env.get_node(name)? {
@@ -229,6 +239,13 @@ impl QueryPlan {
                     }
                     name
                 };
+
+                if let Some(kind) = node.label.kind {
+                    matches.push(MatchStep::Filter(Filter::NodeHasKind {
+                        node: prev_node_name,
+                        kind: kind.to_string(),
+                    }));
+                }
             }
         }
 

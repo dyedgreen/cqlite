@@ -57,7 +57,9 @@ impl CompileEnv {
                 | NextNode(t)
                 | NextEdge(t)
                 | CheckIsOrigin(t, _, _)
-                | CheckIsTarget(t, _, _) => {
+                | CheckIsTarget(t, _, _)
+                | CheckNodeKind(t, _, _)
+                | CheckEdgeKind(t, _, _) => {
                     if *t == from {
                         *t = to;
                     }
@@ -114,6 +116,17 @@ impl CompileEnv {
                 let edge = self.get_stack_idx(*edge)?;
                 self.instructions
                     .push(Instruction::CheckIsTarget(usize::MAX, node, edge))
+            }
+
+            Filter::NodeHasKind { node, kind } => {
+                let node = self.get_stack_idx(*node)?;
+                self.instructions
+                    .push(Instruction::CheckNodeKind(usize::MAX, node, kind.clone()));
+            }
+            Filter::EdgeHasKind { edge, kind } => {
+                let edge = self.get_stack_idx(*edge)?;
+                self.instructions
+                    .push(Instruction::CheckEdgeKind(usize::MAX, edge, kind.clone()));
             }
         }
         Ok(())
@@ -219,7 +232,7 @@ impl CompileEnv {
 }
 
 impl QueryPlan {
-    pub fn compile(&self) -> Result<Program, Error> {
+    pub fn compile(self) -> Result<Program, Error> {
         let mut env = CompileEnv::new();
         env.compile_step(&self, &self.matches)?;
         env.instructions.push(Instruction::Halt);
