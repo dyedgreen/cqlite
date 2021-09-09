@@ -39,3 +39,4 @@ edges.
 ## Crate list (for later reference)
 - https://crates.io/crates/thiserror
 - https://docs.rs/smallvec/1.6.1/smallvec/index.html
+- https://docs.rs/cranelift-jit/0.76.0/cranelift_jit/index.html
