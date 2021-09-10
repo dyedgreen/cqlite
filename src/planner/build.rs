@@ -65,6 +65,13 @@ impl<'a> BuildEnv<'a> {
 
 impl QueryPlan {
     pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
+        if query.match_clauses.is_empty() && !query.where_clauses.is_empty() {
+            return Err(Error::Todo);
+        }
+        if query.match_clauses.is_empty() && !query.return_clause.is_empty() {
+            return Err(Error::Todo);
+        }
+
         let mut env = BuildEnv::new();
         let mut matches = vec![];
 

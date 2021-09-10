@@ -1,84 +1,97 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-/*
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum Value<'a> {
+// Some general notes
+//
+// Currently Nodes are read / written to and from disk whole-sale
+//
+// I think having the key value pairs, and edge associations on the nodes makes sense,
+// but I think there is room to be more hands on with how these are encoded on disk.
+//
+// Specifically, I would like to be able to load and write or serialize and de-serialize
+// independently:
+//
+// - ID
+// - KIND
+// - origins + targets
+// - key value pairs
+//
+// What about something like the following format on disk? (All integer types encoded
+// as little endian):
+//
+// |- HEADER (20 bytes) ---------------------------------------------| ...
+// | id (u64) | kind_len (u32) | origin_len (u32) | target_len (u32) | ...
+//
+// ... |- KIND -|- ORIGINS -|- TARGETS -|- DATA ---------------|
+// ... | [u8]   | [u64]     | [u64]     | [u8] (some encoding) |
+//
+// Currently all nodes are owned, but this can and should change in the future.
+// The storage interface should provide granular methods like:
+//
+// - LoadNode / LoadEdge        (for now, loads a fully owned node or edge)
+// - ...                        (future: provide ways to access borrowed/ partial
+//                               data, owned by the transaction)
+//
+// - CreateNode / CreateEdge    (takes reference to data that should be written)
+// - DeleteNode / DeleteEdge    (takes node/ edge ID)
+// - UpdateNode / UpdateEdge    (takes reference to new key-value pair)
+// - Flush                      (ensures writes are propagated to underlying store)
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Value {
+    Id(u64),
     Integer(i64),
     Real(f64),
     Boolean(bool),
-    #[serde(borrow = "'a")]
-    Text(&'a str),
-    #[serde(borrow = "'a")]
-    Blob(&'a [u8]),
+    Text(String),
+    Blob(Vec<u8>),
+    Null,
 }
-*/
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Node<'a> {
+pub struct Node {
     pub(crate) id: u64,
-    pub(crate) kind: &'a str,
+    pub(crate) kind: String,
+
+    pub(crate) data: HashMap<String, Value>,
     pub(crate) origins: Vec<u64>,
     pub(crate) targets: Vec<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OwnedNode {
-    pub(crate) id: u64,
-    pub(crate) kind: String,
-    pub(crate) origins: Vec<u64>,
-    pub(crate) targets: Vec<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Edge<'a> {
-    pub(crate) id: u64,
-    pub(crate) kind: &'a str,
-    pub(crate) origin: u64,
-    pub(crate) target: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OwnedEdge {
+pub struct Edge {
     pub(crate) id: u64,
     pub(crate) kind: String,
     pub(crate) origin: u64,
     pub(crate) target: u64,
+
+    pub(crate) data: HashMap<String, Value>,
 }
 
-impl<'a> Node<'a> {
+impl Node {
     pub fn id(&self) -> u64 {
         self.id
     }
 
-    pub fn label(&self) -> &'a str {
-        self.kind
+    pub fn label(&self) -> &str {
+        &self.kind
     }
 
-    pub(crate) fn owned(&self) -> OwnedNode {
-        OwnedNode {
-            id: self.id,
-            kind: self.kind.to_string(),
-            origins: self.origins.to_vec(),
-            targets: self.targets.to_vec(),
-        }
+    pub fn entry(&self, key: &str) -> Option<&Value> {
+        self.data.get(key)
     }
 }
 
-impl<'a> Edge<'a> {
+impl Edge {
     pub fn id(&self) -> u64 {
         self.id
     }
 
-    pub fn label(&self) -> &'a str {
-        self.kind
+    pub fn label(&self) -> &str {
+        &self.kind
     }
 
-    pub(crate) fn owned(&self) -> OwnedEdge {
-        OwnedEdge {
-            id: self.id,
-            kind: self.kind.to_string(),
-            origin: self.origin,
-            target: self.target,
-        }
+    pub fn entry(&self, key: &str) -> Option<&Value> {
+        self.data.get(key)
     }
 }

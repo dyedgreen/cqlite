@@ -1,13 +1,14 @@
 use crate::Error;
 use sanakirja::btree::UDb;
 use sanakirja::{btree, Commit, Env, MutTxn, RootDb, Storable, Txn, UnsizedStorable};
+use std::collections::HashMap;
 use std::path::Path;
 
 mod iter;
 mod types;
 
 pub(crate) use iter::{EdgeIter, ValueIter};
-pub use types::{Edge, Node, OwnedEdge, OwnedNode};
+pub use types::{Edge, Node};
 
 // alloc the pages to write to
 // them every time ... You can free them
@@ -102,9 +103,13 @@ impl Store {
 impl<'e> StoreTxn<'e> {
     pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
         let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
-        if let Some((_, bytes)) = entry {
-            let node = bincode::deserialize(bytes.as_ref())?;
-            Ok(Some(node))
+        if let Some((&entry_id, bytes)) = entry {
+            if entry_id == id {
+                let node = bincode::deserialize(bytes.as_ref())?;
+                Ok(Some(node))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -112,9 +117,13 @@ impl<'e> StoreTxn<'e> {
 
     pub fn get_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
         let entry = btree::get(&self.txn, &self.edges, &id, None)?;
-        if let Some((_, bytes)) = entry {
-            let node = bincode::deserialize(bytes.as_ref())?;
-            Ok(Some(node))
+        if let Some((&entry_id, bytes)) = entry {
+            if entry_id == id {
+                let node = bincode::deserialize(bytes.as_ref())?;
+                Ok(Some(node))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -131,7 +140,8 @@ impl<'e> MutStoreTxn<'e> {
     pub fn create_node(&mut self, kind: &str) -> Result<Node, Error> {
         let node = Node {
             id: self.id_seq(),
-            kind,
+            kind: kind.to_string(),
+            data: HashMap::new(),
             origins: Vec::new(),
             targets: Vec::new(),
         };
@@ -146,7 +156,7 @@ impl<'e> MutStoreTxn<'e> {
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
     }
 
-    pub fn update_node(&mut self, node: &OwnedNode) -> Result<(), Error> {
+    fn update_node(&mut self, node: &Node) -> Result<(), Error> {
         let node_bytes = bincode::serialize(&node)?;
         btree::del(&mut self.txn, &mut self.nodes, &node.id, None)?;
         btree::put(
@@ -160,9 +170,13 @@ impl<'e> MutStoreTxn<'e> {
 
     pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
         let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
-        if let Some((_, bytes)) = entry {
-            let node = bincode::deserialize(bytes.as_ref())?;
-            Ok(Some(node))
+        if let Some((&entry_id, bytes)) = entry {
+            if entry_id == id {
+                let node = bincode::deserialize(bytes.as_ref())?;
+                Ok(Some(node))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -171,15 +185,16 @@ impl<'e> MutStoreTxn<'e> {
     pub fn create_edge(&mut self, kind: &str, origin: u64, target: u64) -> Result<Edge, Error> {
         let edge = Edge {
             id: self.id_seq(),
-            kind,
+            kind: kind.to_string(),
+            data: HashMap::new(),
             origin,
             target,
         };
 
-        let mut origin = self.get_node(origin)?.ok_or(Error::Todo)?.owned();
+        let mut origin = self.get_node(origin)?.ok_or(Error::Todo)?;
         origin.origins.push(edge.id);
         self.update_node(&origin)?;
-        let mut target = self.get_node(target)?.ok_or(Error::Todo)?.owned();
+        let mut target = self.get_node(target)?.ok_or(Error::Todo)?;
         target.targets.push(edge.id);
         self.update_node(&target)?;
 

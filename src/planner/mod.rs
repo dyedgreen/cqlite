@@ -22,6 +22,7 @@ mod tests {
                     ast::Node::with_label(ast::Label::with_name("b")),
                 )],
             }],
+            where_clauses: vec![],
             return_clause: vec!["a", "b"],
         };
 

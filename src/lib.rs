@@ -77,7 +77,6 @@ impl Graph {
 
         txn.create_edge("KNOWS", a, b)?;
         txn.create_edge("HEARD_OF", b, a)?;
-
         txn.commit()?;
 
         Ok(())
@@ -113,7 +112,7 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 }
 
 impl<'query> Match<'query> {
-    pub fn node(&self, idx: usize) -> Result<&Node<'query>, Error> {
+    pub fn node(&self, idx: usize) -> Result<&Node, Error> {
         match self.query.stmt.program.returns.get(idx) {
             Some(StackValue::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
             Some(StackValue::Edge(_)) => Err(Error::Todo),
@@ -121,7 +120,7 @@ impl<'query> Match<'query> {
         }
     }
 
-    pub fn edge(&self, idx: usize) -> Result<&Edge<'query>, Error> {
+    pub fn edge(&self, idx: usize) -> Result<&Edge, Error> {
         match self.query.stmt.program.returns.get(idx) {
             Some(StackValue::Node(_)) => Err(Error::Todo),
             Some(StackValue::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),

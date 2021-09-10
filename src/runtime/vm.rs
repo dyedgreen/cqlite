@@ -8,9 +8,9 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'inst> {
     instructions: &'inst [Instruction],
     current_inst: usize,
 
-    pub(crate) node_stack: Vec<Node<'txn>>,
-    pub(crate) edge_stack: Vec<Edge<'txn>>,
-    node_iters: Vec<ValueIter<'txn, Txn<&'env Env>, Node<'txn>>>,
+    pub(crate) node_stack: Vec<Node>,
+    pub(crate) edge_stack: Vec<Edge>,
+    node_iters: Vec<ValueIter<'txn, Txn<&'env Env>, Node>>,
     edge_iters: Vec<EdgeIter>,
 }
 
@@ -183,7 +183,7 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
 
                 Instruction::CheckNodeKind(jump, node, kind) => {
                     let node = &self.node_stack[*node];
-                    if node.kind == kind {
+                    if node.kind == kind.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -191,7 +191,7 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                 }
                 Instruction::CheckEdgeKind(jump, edge, kind) => {
                     let edge = &self.edge_stack[*edge];
-                    if edge.kind == kind {
+                    if edge.kind == kind.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
