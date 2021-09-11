@@ -16,10 +16,10 @@ mod tests {
         // (a) -> (b)
         let query = ast::Query {
             match_clauses: vec![ast::MatchClause {
-                start: ast::Node::with_label(ast::Label::with_name("a")),
+                start: ast::Node::with_annotation(ast::Annotation::with_name("a")),
                 edges: vec![(
-                    ast::Edge::right(ast::Label::empty()),
-                    ast::Node::with_label(ast::Label::with_name("b")),
+                    ast::Edge::right(ast::Annotation::empty()),
+                    ast::Node::with_annotation(ast::Annotation::with_name("b")),
                 )],
             }],
             where_clauses: vec![],
@@ -27,7 +27,7 @@ mod tests {
         };
 
         let plan = QueryPlan {
-            matches: vec![
+            steps: vec![
                 MatchStep::LoadAnyNode { name: 0 },
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
@@ -41,7 +41,7 @@ mod tests {
     #[test]
     fn compile_a_to_b() {
         let plan = QueryPlan {
-            matches: vec![
+            steps: vec![
                 MatchStep::LoadAnyNode { name: 0 },
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },

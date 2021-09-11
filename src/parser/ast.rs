@@ -12,49 +12,49 @@ pub struct MatchClause<'src> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Label<'src> {
+pub struct Annotation<'src> {
     pub name: Option<&'src str>,
-    pub kind: Option<&'src str>,
+    pub label: Option<&'src str>,
 }
 
-impl<'src> Label<'src> {
+impl<'src> Annotation<'src> {
     pub fn new(name: &'src str, kind: &'src str) -> Self {
         Self {
             name: Some(name),
-            kind: Some(kind),
+            label: Some(kind),
         }
     }
 
     pub fn with_name(name: &'src str) -> Self {
         Self {
             name: Some(name),
-            kind: None,
+            label: None,
         }
     }
 
-    pub fn with_kind(kind: &'src str) -> Self {
+    pub fn with_label(label: &'src str) -> Self {
         Self {
             name: None,
-            kind: Some(kind),
+            label: Some(label),
         }
     }
 
     pub fn empty() -> Self {
         Self {
             name: None,
-            kind: None,
+            label: None,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Node<'src> {
-    pub label: Label<'src>,
+    pub annotation: Annotation<'src>,
 }
 
 impl<'src> Node<'src> {
-    pub fn with_label(label: Label<'src>) -> Self {
-        Self { label }
+    pub fn with_annotation(annotation: Annotation<'src>) -> Self {
+        Self { annotation }
     }
 }
 
@@ -68,28 +68,28 @@ pub enum Direction {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Edge<'src> {
     pub direction: Direction,
-    pub label: Label<'src>,
+    pub annotation: Annotation<'src>,
 }
 
 impl<'src> Edge<'src> {
-    pub fn either(label: Label<'src>) -> Self {
+    pub fn either(annotation: Annotation<'src>) -> Self {
         Self {
             direction: Direction::Either,
-            label,
+            annotation,
         }
     }
 
-    pub fn left(label: Label<'src>) -> Self {
+    pub fn left(annotation: Annotation<'src>) -> Self {
         Self {
             direction: Direction::Left,
-            label,
+            annotation,
         }
     }
 
-    pub fn right(label: Label<'src>) -> Self {
+    pub fn right(annotation: Annotation<'src>) -> Self {
         Self {
             direction: Direction::Right,
-            label,
+            annotation,
         }
     }
 }

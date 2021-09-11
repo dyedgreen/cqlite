@@ -73,47 +73,47 @@ impl QueryPlan {
         }
 
         let mut env = BuildEnv::new();
-        let mut matches = vec![];
+        let mut steps = vec![];
 
         for clause in &query.match_clauses {
-            let mut prev_node_name = if let Some(name) = clause.start.label.name {
+            let mut prev_node_name = if let Some(name) = clause.start.annotation.name {
                 if let Some(name) = env.get_node(name)? {
                     name
                 } else {
                     let name = env.create_node(name)?;
-                    matches.push(MatchStep::LoadAnyNode { name });
+                    steps.push(MatchStep::LoadAnyNode { name });
                     name
                 }
             } else {
                 let name = env.next_name();
-                matches.push(MatchStep::LoadAnyNode { name });
+                steps.push(MatchStep::LoadAnyNode { name });
                 name
             };
 
-            if let Some(kind) = clause.start.label.kind {
-                matches.push(MatchStep::Filter(Filter::NodeHasKind {
+            if let Some(label) = clause.start.annotation.label {
+                steps.push(MatchStep::Filter(Filter::NodeHasLabel {
                     node: prev_node_name,
-                    kind: kind.to_string(),
+                    label: label.to_string(),
                 }));
             }
 
             for (edge, node) in &clause.edges {
-                let edge_name = if let Some(name) = edge.label.name {
+                let edge_name = if let Some(name) = edge.annotation.name {
                     if let Some(name) = env.get_edge(name)? {
                         match edge.direction {
                             ast::Direction::Left => {
-                                matches.push(MatchStep::Filter(Filter::IsTarget {
+                                steps.push(MatchStep::Filter(Filter::IsTarget {
                                     node: prev_node_name,
                                     edge: name,
                                 }))
                             }
                             ast::Direction::Right => {
-                                matches.push(MatchStep::Filter(Filter::IsOrigin {
+                                steps.push(MatchStep::Filter(Filter::IsOrigin {
                                     node: prev_node_name,
                                     edge: name,
                                 }))
                             }
-                            ast::Direction::Either => matches.push(MatchStep::Filter(Filter::or(
+                            ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
                                 Filter::IsOrigin {
                                     node: prev_node_name,
                                     edge: name,
@@ -128,15 +128,15 @@ impl QueryPlan {
                     } else {
                         let name = env.create_edge(name)?;
                         match edge.direction {
-                            ast::Direction::Left => matches.push(MatchStep::LoadTargetEdge {
+                            ast::Direction::Left => steps.push(MatchStep::LoadTargetEdge {
                                 name,
                                 node: prev_node_name,
                             }),
-                            ast::Direction::Right => matches.push(MatchStep::LoadOriginEdge {
+                            ast::Direction::Right => steps.push(MatchStep::LoadOriginEdge {
                                 name,
                                 node: prev_node_name,
                             }),
-                            ast::Direction::Either => matches.push(MatchStep::LoadEitherEdge {
+                            ast::Direction::Either => steps.push(MatchStep::LoadEitherEdge {
                                 name,
                                 node: prev_node_name,
                             }),
@@ -146,15 +146,15 @@ impl QueryPlan {
                 } else {
                     let name = env.next_name();
                     match edge.direction {
-                        ast::Direction::Left => matches.push(MatchStep::LoadTargetEdge {
+                        ast::Direction::Left => steps.push(MatchStep::LoadTargetEdge {
                             name,
                             node: prev_node_name,
                         }),
-                        ast::Direction::Right => matches.push(MatchStep::LoadOriginEdge {
+                        ast::Direction::Right => steps.push(MatchStep::LoadOriginEdge {
                             name,
                             node: prev_node_name,
                         }),
-                        ast::Direction::Either => matches.push(MatchStep::LoadEitherEdge {
+                        ast::Direction::Either => steps.push(MatchStep::LoadEitherEdge {
                             name,
                             node: prev_node_name,
                         }),
@@ -162,29 +162,29 @@ impl QueryPlan {
                     name
                 };
 
-                if let Some(kind) = edge.label.kind {
-                    matches.push(MatchStep::Filter(Filter::EdgeHasKind {
+                if let Some(label) = edge.annotation.label {
+                    steps.push(MatchStep::Filter(Filter::EdgeHasLabel {
                         edge: edge_name,
-                        kind: kind.to_string(),
+                        label: label.to_string(),
                     }));
                 }
 
-                prev_node_name = if let Some(name) = node.label.name {
+                prev_node_name = if let Some(name) = node.annotation.name {
                     if let Some(name) = env.get_node(name)? {
                         match edge.direction {
                             ast::Direction::Left => {
-                                matches.push(MatchStep::Filter(Filter::IsOrigin {
+                                steps.push(MatchStep::Filter(Filter::IsOrigin {
                                     node: name,
                                     edge: edge_name,
                                 }))
                             }
                             ast::Direction::Right => {
-                                matches.push(MatchStep::Filter(Filter::IsTarget {
+                                steps.push(MatchStep::Filter(Filter::IsTarget {
                                     node: name,
                                     edge: edge_name,
                                 }))
                             }
-                            ast::Direction::Either => matches.push(MatchStep::Filter(Filter::or(
+                            ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
                                 Filter::and(
                                     Filter::IsOrigin {
                                         node: name,
@@ -211,15 +211,15 @@ impl QueryPlan {
                     } else {
                         let name = env.create_node(name)?;
                         match edge.direction {
-                            ast::Direction::Left => matches.push(MatchStep::LoadOriginNode {
+                            ast::Direction::Left => steps.push(MatchStep::LoadOriginNode {
                                 name,
                                 edge: edge_name,
                             }),
-                            ast::Direction::Right => matches.push(MatchStep::LoadTargetNode {
+                            ast::Direction::Right => steps.push(MatchStep::LoadTargetNode {
                                 name,
                                 edge: edge_name,
                             }),
-                            ast::Direction::Either => matches.push(MatchStep::LoadOtherNode {
+                            ast::Direction::Either => steps.push(MatchStep::LoadOtherNode {
                                 name,
                                 node: prev_node_name,
                                 edge: edge_name,
@@ -230,15 +230,15 @@ impl QueryPlan {
                 } else {
                     let name = env.next_name();
                     match edge.direction {
-                        ast::Direction::Left => matches.push(MatchStep::LoadOriginNode {
+                        ast::Direction::Left => steps.push(MatchStep::LoadOriginNode {
                             name,
                             edge: edge_name,
                         }),
-                        ast::Direction::Right => matches.push(MatchStep::LoadTargetNode {
+                        ast::Direction::Right => steps.push(MatchStep::LoadTargetNode {
                             name,
                             edge: edge_name,
                         }),
-                        ast::Direction::Either => matches.push(MatchStep::LoadOtherNode {
+                        ast::Direction::Either => steps.push(MatchStep::LoadOtherNode {
                             name,
                             node: prev_node_name,
                             edge: edge_name,
@@ -247,10 +247,10 @@ impl QueryPlan {
                     name
                 };
 
-                if let Some(kind) = node.label.kind {
-                    matches.push(MatchStep::Filter(Filter::NodeHasKind {
+                if let Some(label) = node.annotation.label {
+                    steps.push(MatchStep::Filter(Filter::NodeHasLabel {
                         node: prev_node_name,
-                        kind: kind.to_string(),
+                        label: label.to_string(),
                     }));
                 }
             }
@@ -261,6 +261,6 @@ impl QueryPlan {
             returns.push(*env.names.get(name).ok_or(Error::Todo)?);
         }
 
-        Ok(QueryPlan { matches, returns })
+        Ok(QueryPlan { steps, returns })
     }
 }

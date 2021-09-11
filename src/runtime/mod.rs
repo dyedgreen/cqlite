@@ -43,17 +43,17 @@ mod tests {
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());
-        assert_eq!("PERSON_A", vm.node_stack[0].kind);
-        assert_eq!("PERSON_B", vm.node_stack[1].kind);
+        assert_eq!("PERSON_A", vm.node_stack[0].label());
+        assert_eq!("PERSON_B", vm.node_stack[1].label());
         assert_eq!(1, vm.edge_stack.len());
-        assert_eq!("KNOWS", vm.edge_stack[0].kind);
+        assert_eq!("KNOWS", vm.edge_stack[0].label());
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());
-        assert_eq!("PERSON_B", vm.node_stack[0].kind);
-        assert_eq!("PERSON_A", vm.node_stack[1].kind);
+        assert_eq!("PERSON_B", vm.node_stack[0].label());
+        assert_eq!("PERSON_A", vm.node_stack[1].label());
         assert_eq!(1, vm.edge_stack.len());
-        assert_eq!("KNOWS", vm.edge_stack[0].kind);
+        assert_eq!("KNOWS", vm.edge_stack[0].label());
 
         assert_eq!(Ok(Status::Halt), vm.run());
     }

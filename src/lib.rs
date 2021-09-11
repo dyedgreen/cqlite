@@ -152,14 +152,14 @@ mod tests {
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("PERSON_B", result.node(1).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("PERSON_B", result.node(1).unwrap().label());
+        assert_eq!("KNOWS", result.edge(2).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
-        assert_eq!("PERSON_A", result.node(1).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+        assert_eq!("PERSON_B", result.node(0).unwrap().label());
+        assert_eq!("PERSON_A", result.node(1).unwrap().label());
+        assert_eq!("KNOWS", result.edge(2).unwrap().label());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -180,14 +180,14 @@ mod tests {
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("PERSON_B", result.node(1).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("PERSON_B", result.node(1).unwrap().label());
+        assert_eq!("KNOWS", result.edge(2).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
-        assert_eq!("PERSON_A", result.node(1).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+        assert_eq!("PERSON_B", result.node(0).unwrap().label());
+        assert_eq!("PERSON_A", result.node(1).unwrap().label());
+        assert_eq!("KNOWS", result.edge(2).unwrap().label());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -209,12 +209,12 @@ mod tests {
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_B", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -236,20 +236,20 @@ mod tests {
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_B", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(1).unwrap().kind);
+        assert_eq!("PERSON_B", result.node(0).unwrap().label());
+        assert_eq!("KNOWS", result.edge(1).unwrap().label());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -273,9 +273,9 @@ mod tests {
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().kind);
-        assert_eq!("PERSON_B", result.node(1).unwrap().kind);
-        assert_eq!("KNOWS", result.edge(2).unwrap().kind);
+        assert_eq!("PERSON_A", result.node(0).unwrap().label());
+        assert_eq!("PERSON_B", result.node(1).unwrap().label());
+        assert_eq!("KNOWS", result.edge(2).unwrap().label());
 
         assert!(matches.step().unwrap().is_none());
     }

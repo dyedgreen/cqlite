@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct QueryPlan {
-    pub matches: Vec<MatchStep>,
+    pub steps: Vec<MatchStep>,
     pub returns: Vec<NamedValue>,
 }
 
@@ -32,8 +32,8 @@ pub(crate) enum Filter {
 
     IsOrigin { node: usize, edge: usize },
     IsTarget { node: usize, edge: usize },
-    NodeHasKind { node: usize, kind: String },
-    EdgeHasKind { edge: usize, kind: String },
+    NodeHasLabel { node: usize, label: String },
+    EdgeHasLabel { edge: usize, label: String },
 }
 
 impl Filter {

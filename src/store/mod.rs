@@ -137,10 +137,10 @@ impl<'e> MutStoreTxn<'e> {
         id
     }
 
-    pub fn create_node(&mut self, kind: &str) -> Result<Node, Error> {
+    pub fn create_node(&mut self, label: &str) -> Result<Node, Error> {
         let node = Node {
             id: self.id_seq(),
-            kind: kind.to_string(),
+            label: label.to_string(),
             data: HashMap::new(),
             origins: Vec::new(),
             targets: Vec::new(),
@@ -182,10 +182,10 @@ impl<'e> MutStoreTxn<'e> {
         }
     }
 
-    pub fn create_edge(&mut self, kind: &str, origin: u64, target: u64) -> Result<Edge, Error> {
+    pub fn create_edge(&mut self, label: &str, origin: u64, target: u64) -> Result<Edge, Error> {
         let edge = Edge {
             id: self.id_seq(),
-            kind: kind.to_string(),
+            label: label.to_string(),
             data: HashMap::new(),
             origin,
             target,
@@ -235,8 +235,8 @@ mod tests {
         let node2 = txn.get_node(node2).unwrap().unwrap();
         let edge = txn.get_edge(edge).unwrap().unwrap();
 
-        assert_eq!(node1.kind, "PERSON");
-        assert_eq!(node2.kind, "PERSON");
-        assert_eq!(edge.kind, "KNOWS");
+        assert_eq!(node1.label(), "PERSON");
+        assert_eq!(node2.label(), "PERSON");
+        assert_eq!(edge.label(), "KNOWS");
     }
 }

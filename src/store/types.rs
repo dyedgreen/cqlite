@@ -51,7 +51,7 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub(crate) id: u64,
-    pub(crate) kind: String,
+    pub(crate) label: String,
 
     pub(crate) data: HashMap<String, Value>,
     pub(crate) origins: Vec<u64>,
@@ -61,7 +61,7 @@ pub struct Node {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     pub(crate) id: u64,
-    pub(crate) kind: String,
+    pub(crate) label: String,
     pub(crate) origin: u64,
     pub(crate) target: u64,
 
@@ -74,7 +74,7 @@ impl Node {
     }
 
     pub fn label(&self) -> &str {
-        &self.kind
+        self.label.as_str()
     }
 
     pub fn entry(&self, key: &str) -> Option<&Value> {
@@ -88,7 +88,7 @@ impl Edge {
     }
 
     pub fn label(&self) -> &str {
-        &self.kind
+        self.label.as_str()
     }
 
     pub fn entry(&self, key: &str) -> Option<&Value> {

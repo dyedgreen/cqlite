@@ -44,8 +44,8 @@ pub(crate) enum Instruction {
     CheckIsOrigin(usize, usize, usize), // given (jump, node, edge), jump if node is not edge origin
     CheckIsTarget(usize, usize, usize), // given (jump, node, edge), jump if node is not edge target
 
-    CheckNodeKind(usize, usize, String), // given (jump, node, kind), jump is the kind is different
-    CheckEdgeKind(usize, usize, String), // given (jump, edge, kind), jump is the kind is different
+    CheckNodeLabel(usize, usize, String), // given (jump, node, label), jump is the label is different
+    CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -181,17 +181,17 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                     }
                 }
 
-                Instruction::CheckNodeKind(jump, node, kind) => {
+                Instruction::CheckNodeLabel(jump, node, label) => {
                     let node = &self.node_stack[*node];
-                    if node.kind == kind.as_str() {
+                    if node.label.as_str() == label.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckEdgeKind(jump, edge, kind) => {
+                Instruction::CheckEdgeLabel(jump, edge, label) => {
                     let edge = &self.edge_stack[*edge];
-                    if edge.kind == kind.as_str() {
+                    if edge.label.as_str() == label.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;

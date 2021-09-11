@@ -63,21 +63,21 @@ peg::parser! {
             = ident:$(alpha()alpha_num()*) { ident }
 
         // e.g. 'a', 'a : PERSON', ': KNOWS'
-        rule label() -> Label<'input>
-            = name:ident()? kind:( _* ":" _* k:ident() { k } )? { Label { name, kind } }
+        rule annotation() -> Annotation<'input>
+            = name:ident()? label:( _* ":" _* k:ident() { k } )? { Annotation { name, label } }
 
         // e.g. '()', '( a:PERSON )', '(b)', '(a : OTHER_THING)'
         rule node() -> Node<'input>
-            = "(" _* label:label() _* ")" { Node::with_label(label) }
+            = "(" _* label:annotation() _* ")" { Node::with_annotation(label) }
 
         // e.g. '-', '<-', '-[ name:KIND ]-', '<-[name]-'
         rule edge() -> Edge<'input>
-            =  "-[" _* l:label() _* "]->" { Edge::right(l) }
-            /  "-[" _* l:label() _* "]-"  { Edge::either(l) }
-            / "<-[" _* l:label() _* "]-"  { Edge::left(l) }
-            / "<-" { Edge::left(Label::empty()) }
-            / "->" { Edge::right(Label::empty()) }
-            / "-" { Edge::either(Label::empty()) }
+            =  "-[" _* a:annotation() _* "]->" { Edge::right(a) }
+            /  "-[" _* a:annotation() _* "]-"  { Edge::either(a) }
+            / "<-[" _* a:annotation() _* "]-"  { Edge::left(a) }
+            / "<-" { Edge::left(Annotation::empty()) }
+            / "->" { Edge::right(Annotation::empty()) }
+            / "-" { Edge::either(Annotation::empty()) }
 
 
         rule expression() -> Expression<'input>
@@ -92,11 +92,11 @@ peg::parser! {
             --
             kw_not() _* c:(@) { Condition::not(c) }
             --
-            a:expression() _* "=" _* b:expression() { Condition::Eq(a, b) }
+            a:expression() _* "="  _* b:expression() { Condition::Eq(a, b) }
             a:expression() _* "<>" _* b:expression() { Condition::Ne(a, b) }
-            a:expression() _* "<" _* b:expression() { Condition::Lt(a, b) }
+            a:expression() _* "<"  _* b:expression() { Condition::Lt(a, b) }
             a:expression() _* "<=" _* b:expression() { Condition::Le(a, b) }
-            a:expression() _* ">" _* b:expression() { Condition::Gt(a, b) }
+            a:expression() _* ">"  _* b:expression() { Condition::Gt(a, b) }
             a:expression() _* ">=" _* b:expression() { Condition::Ge(a, b) }
             --
             e:expression() { Condition::Expression(e) }
@@ -143,10 +143,10 @@ mod tests {
             cypher::query("MATCH (a) - (b) RETURN a "),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::either(Label::empty()),
-                        Node::with_label(Label::with_name("b"))
+                        Edge::either(Annotation::empty()),
+                        Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
                 where_clauses: vec![],
@@ -154,24 +154,27 @@ mod tests {
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a:KIND) <- ( )\nRETURN a"),
+            cypher::query("MATCH (a:LABEL) <- ( )\nRETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::new("a", "KIND")),
-                    edges: vec![(Edge::left(Label::empty()), Node::with_label(Label::empty()))],
+                    start: Node::with_annotation(Annotation::new("a", "LABEL")),
+                    edges: vec![(
+                        Edge::left(Annotation::empty()),
+                        Node::with_annotation(Annotation::empty())
+                    )],
                 }],
                 where_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
         assert_eq!(
-            cypher::query(" MATCH () -> (:KIND_ONLY) RETURN a"),
+            cypher::query(" MATCH () -> (:LABEL_ONLY) RETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::empty()),
+                    start: Node::with_annotation(Annotation::empty()),
                     edges: vec![(
-                        Edge::right(Label::empty()),
-                        Node::with_label(Label::with_kind("KIND_ONLY"))
+                        Edge::right(Annotation::empty()),
+                        Node::with_annotation(Annotation::with_label("LABEL_ONLY"))
                     )],
                 }],
                 where_clauses: vec![],
@@ -183,10 +186,10 @@ mod tests {
             cypher::query("MATCH \n (a)  -[edge]->  (b) RETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::right(Label::with_name("edge")),
-                        Node::with_label(Label::with_name("b"))
+                        Edge::right(Annotation::with_name("edge")),
+                        Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
                 where_clauses: vec![],
@@ -197,10 +200,10 @@ mod tests {
             cypher::query("MATCH (a) <-[e:KNOWS]- (b) RETURN e, b"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::left(Label::new("e", "KNOWS")),
-                        Node::with_label(Label::with_name("b"))
+                        Edge::left(Annotation::new("e", "KNOWS")),
+                        Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
                 where_clauses: vec![],
@@ -211,10 +214,10 @@ mod tests {
             cypher::query("MATCH (a) -[]- (b) RETURN a, b"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::either(Label::empty()),
-                        Node::with_label(Label::with_name("b"))
+                        Edge::either(Annotation::empty()),
+                        Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
                 where_clauses: vec![],
@@ -226,15 +229,15 @@ mod tests {
             cypher::query("MATCH (a) -> (b) - (c) RETURN a , b, c"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![
                         (
-                            Edge::right(Label::empty()),
-                            Node::with_label(Label::with_name("b"))
+                            Edge::right(Annotation::empty()),
+                            Node::with_annotation(Annotation::with_name("b"))
                         ),
                         (
-                            Edge::either(Label::empty()),
-                            Node::with_label(Label::with_name("c"))
+                            Edge::either(Annotation::empty()),
+                            Node::with_annotation(Annotation::with_name("c"))
                         )
                     ],
                 }],
@@ -247,17 +250,17 @@ mod tests {
             Ok(Query {
                 match_clauses: vec![
                     MatchClause {
-                        start: Node::with_label(Label::with_name("a")),
+                        start: Node::with_annotation(Annotation::with_name("a")),
                         edges: vec![(
-                            Edge::right(Label::empty()),
-                            Node::with_label(Label::with_name("b"))
+                            Edge::right(Annotation::empty()),
+                            Node::with_annotation(Annotation::with_name("b"))
                         )],
                     },
                     MatchClause {
-                        start: Node::with_label(Label::with_name("b")),
+                        start: Node::with_annotation(Annotation::with_name("b")),
                         edges: vec![(
-                            Edge::right(Label::empty()),
-                            Node::with_label(Label::with_name("c"))
+                            Edge::right(Annotation::empty()),
+                            Node::with_annotation(Annotation::with_name("c"))
                         )],
                     }
                 ],
@@ -273,7 +276,7 @@ mod tests {
             cypher::query("MATCH (a) WHERE ID(a) = 42 RETURN a"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![],
                 }],
                 where_clauses: vec![Condition::Eq(
@@ -294,10 +297,10 @@ mod tests {
             ),
             Ok(Query {
                 match_clauses: vec![MatchClause {
-                    start: Node::with_label(Label::with_name("a")),
+                    start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::right(Label::new("e", "KNOWS")),
-                        Node::with_label(Label::with_name("b"))
+                        Edge::right(Annotation::new("e", "KNOWS")),
+                        Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
                 where_clauses: vec![Condition::or(
