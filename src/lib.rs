@@ -2,9 +2,9 @@
 #![allow(dead_code)]
 
 use planner::QueryPlan;
-use runtime::{Program, StackValue, Status, VirtualMachine};
+use runtime::{Program, Status, ValueAccess, VirtualMachine};
 use std::path::Path;
-use store::{Edge, Node, Store, StoreTxn};
+use store::{Store, StoreTxn};
 
 pub(crate) mod error;
 pub(crate) mod parser;
@@ -13,6 +13,7 @@ pub(crate) mod runtime;
 pub(crate) mod store;
 
 pub use error::Error;
+pub use store::{Edge, Node, PropertyValue};
 
 /// TODO: A handle to the database
 pub struct Graph {
@@ -90,7 +91,11 @@ impl<'graph> Statement<'graph> {
     ) -> Result<Query<'stmt, 'txn>, Error> {
         Ok(Query {
             stmt: self,
-            vm: VirtualMachine::new(&txn.0, self.program.instructions.as_slice()),
+            vm: VirtualMachine::new(
+                &txn.0,
+                &self.program.instructions[..],
+                &self.program.accesses[..],
+            ),
         })
     }
 
@@ -114,16 +119,22 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 impl<'query> Match<'query> {
     pub fn node(&self, idx: usize) -> Result<&Node, Error> {
         match self.query.stmt.program.returns.get(idx) {
-            Some(StackValue::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
-            Some(StackValue::Edge(_)) => Err(Error::Todo),
+            Some(ValueAccess::Constant(_)) => Err(Error::Todo),
+            Some(ValueAccess::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
+            Some(ValueAccess::Edge(_)) => Err(Error::Todo),
+            Some(ValueAccess::NodeProperty(_, _)) => Err(Error::Todo),
+            Some(ValueAccess::EdgeProperty(_, _)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
 
     pub fn edge(&self, idx: usize) -> Result<&Edge, Error> {
         match self.query.stmt.program.returns.get(idx) {
-            Some(StackValue::Node(_)) => Err(Error::Todo),
-            Some(StackValue::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
+            Some(ValueAccess::Constant(_)) => Err(Error::Todo),
+            Some(ValueAccess::Node(_)) => Err(Error::Todo),
+            Some(ValueAccess::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
+            Some(ValueAccess::NodeProperty(_, _)) => Err(Error::Todo),
+            Some(ValueAccess::EdgeProperty(_, _)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
@@ -276,6 +287,39 @@ mod tests {
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
         assert_eq!("PERSON_B", result.node(1).unwrap().label());
         assert_eq!("KNOWS", result.edge(2).unwrap().label());
+
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_a_edge_b_with_where() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let mut a = txn.create_node("PERSON").unwrap();
+        a.properties
+            .insert("test".into(), PropertyValue::Integer(42));
+        txn.update_node(&a).unwrap();
+        let b = txn.create_node("PERSON").unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id()).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph
+            .prepare(
+                "
+                MATCH (a:PERSON) -[:KNOWS]- (b:PERSON)
+                WHERE a.test = 42
+                RETURN a, b
+                ",
+            )
+            .unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&txn).unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!(a.id(), result.node(0).unwrap().id());
+        assert_eq!(b.id(), result.node(1).unwrap().id());
 
         assert!(matches.step().unwrap().is_none());
     }

@@ -1,7 +1,9 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+use crate::store::PropertyValue;
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct QueryPlan {
     pub steps: Vec<MatchStep>,
-    pub returns: Vec<NamedValue>,
+    pub returns: Vec<NamedEntity>,
 }
 
 /// A step in the logical query plan. The execution model
@@ -10,7 +12,7 @@ pub(crate) struct QueryPlan {
 ///
 /// TODO: Describe this more clearly ...
 #[rustfmt::skip]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum MatchStep {
     LoadAnyNode { name: usize },
     LoadOriginNode { name: usize, edge: usize },
@@ -24,7 +26,7 @@ pub(crate) enum MatchStep {
     Filter(Filter),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Filter {
     And(Box<Filter>, Box<Filter>),
     Or(Box<Filter>, Box<Filter>),
@@ -34,6 +36,12 @@ pub(crate) enum Filter {
     IsTarget { node: usize, edge: usize },
     NodeHasLabel { node: usize, label: String },
     EdgeHasLabel { edge: usize, label: String },
+
+    IsTruthy(AccessValue),
+
+    Eq(AccessValue, AccessValue),
+    Lt(AccessValue, AccessValue),
+    Gt(AccessValue, AccessValue),
 }
 
 impl Filter {
@@ -51,7 +59,21 @@ impl Filter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum NamedValue {
+pub(crate) enum NamedEntity {
     Node(usize),
     Edge(usize),
+}
+
+/// TODO: Fix this naming nightmare ...
+/// it could be called 'LoadValue'?
+/// FIXME: The plan does not need to take
+/// ownership here ... (and then these can
+/// be Happy + Copy)
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum AccessValue {
+    Constant(PropertyValue),
+    IdOfNode { node: usize },
+    IdOfEdge { edge: usize },
+    PropertyOfNode { node: usize, key: String },
+    PropertyOfEdge { edge: usize, key: String },
 }

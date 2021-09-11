@@ -1,23 +1,36 @@
 use crate::runtime::Instruction;
+use crate::store::PropertyValue;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Program {
     pub instructions: Vec<Instruction>,
-    pub returns: Vec<StackValue>,
+    pub accesses: Vec<ValueAccess>, // TODO: more clear naming (?)
+    pub returns: Vec<ValueAccess>,
 }
 
-/// TODO: Maybe later this will also encompass bound
-/// values/ literals ...
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum StackValue {
-    Node(usize),
-    Edge(usize),
+/// TODO: An instruction to access a value
+/// TODO: Find a better name...
+/// this is meant to allow accessing nodes, edges, properties, and constants ...
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ValueAccess {
+    Constant(PropertyValue),
+
+    Node(usize), // node on the stack
+    Edge(usize), // edge on the stack
+
+    NodeProperty(usize, String),
+    EdgeProperty(usize, String),
 }
 
 impl Program {
-    pub fn new(instructions: Vec<Instruction>, returns: Vec<StackValue>) -> Self {
+    pub fn new(
+        instructions: Vec<Instruction>,
+        accesses: Vec<ValueAccess>,
+        returns: Vec<ValueAccess>,
+    ) -> Self {
         Self {
             instructions,
+            accesses,
             returns,
         }
     }

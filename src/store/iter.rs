@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 
 use super::types::Node;
 
-pub(crate) struct ValueIter<'t, T, I>
+pub(crate) struct EntityIter<'t, T, I>
 where
     T: LoadPage,
     I: Deserialize<'t>,
@@ -14,7 +14,7 @@ where
     _item: PhantomData<&'t I>,
 }
 
-impl<'t, T, I> ValueIter<'t, T, I>
+impl<'t, T, I> EntityIter<'t, T, I>
 where
     T: LoadPage,
     T::Error: std::error::Error,
@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<'t, T, I> Iterator for ValueIter<'t, T, I>
+impl<'t, T, I> Iterator for EntityIter<'t, T, I>
 where
     T: LoadPage,
     I: Deserialize<'t>,

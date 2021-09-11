@@ -1,8 +1,8 @@
-use crate::runtime::{Instruction, Program, StackValue};
+use crate::runtime::{Instruction, Program, ValueAccess};
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{Filter, MatchStep, NamedValue, QueryPlan};
+use super::plan::{AccessValue, Filter, MatchStep, NamedEntity, QueryPlan};
 
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
@@ -10,7 +10,8 @@ pub struct CompileEnv {
     edge_stack_len: usize,
 
     instructions: Vec<Instruction>,
-    returns: Vec<StackValue>,
+    accesses: Vec<ValueAccess>,
+    returns: Vec<ValueAccess>,
 }
 
 impl CompileEnv {
@@ -21,6 +22,7 @@ impl CompileEnv {
             edge_stack_len: 0,
 
             instructions: Vec::new(),
+            accesses: Vec::new(),
             returns: Vec::new(),
         }
     }
@@ -59,7 +61,8 @@ impl CompileEnv {
                 | CheckIsOrigin(t, _, _)
                 | CheckIsTarget(t, _, _)
                 | CheckNodeLabel(t, _, _)
-                | CheckEdgeLabel(t, _, _) => {
+                | CheckEdgeLabel(t, _, _)
+                | CheckEq(t, _, _) => {
                     if *t == from {
                         *t = to;
                     }
@@ -77,6 +80,33 @@ impl CompileEnv {
                 | PopNode
                 | PopEdge => (),
             }
+        }
+    }
+
+    fn compile_access(&mut self, access: &AccessValue) -> Result<usize, Error> {
+        let access = match access {
+            AccessValue::Constant(val) => ValueAccess::Constant(val.clone()),
+            AccessValue::IdOfNode { .. } => unimplemented!(),
+            AccessValue::IdOfEdge { .. } => unimplemented!(),
+            AccessValue::PropertyOfNode { node, key } => {
+                let node = self.get_stack_idx(*node)?;
+                ValueAccess::NodeProperty(node, key.clone())
+            }
+            AccessValue::PropertyOfEdge { edge, key } => {
+                let edge = self.get_stack_idx(*edge)?;
+                ValueAccess::EdgeProperty(edge, key.clone())
+            }
+        };
+        if let Some(idx) =
+            self.accesses
+                .iter()
+                .enumerate()
+                .find_map(|(i, a)| if *a == access { Some(i) } else { None })
+        {
+            Ok(idx)
+        } else {
+            self.accesses.push(access);
+            Ok(self.accesses.len() - 1)
         }
     }
 
@@ -134,6 +164,17 @@ impl CompileEnv {
                     label.clone(),
                 ));
             }
+
+            Filter::IsTruthy(_) => unimplemented!(),
+
+            Filter::Eq(lhs, rhs) => {
+                let lhs = self.compile_access(lhs)?;
+                let rhs = self.compile_access(rhs)?;
+                self.instructions
+                    .push(Instruction::CheckEq(usize::MAX, lhs, rhs));
+            }
+            Filter::Gt(_, _) => unimplemented!(),
+            Filter::Lt(_, _) => unimplemented!(),
         }
         Ok(())
     }
@@ -227,8 +268,8 @@ impl CompileEnv {
             if self.returns.is_empty() {
                 for value in &plan.returns {
                     self.returns.push(match value {
-                        NamedValue::Node(name) => StackValue::Node(self.get_stack_idx(*name)?),
-                        NamedValue::Edge(name) => StackValue::Edge(self.get_stack_idx(*name)?),
+                        NamedEntity::Node(name) => ValueAccess::Node(self.get_stack_idx(*name)?),
+                        NamedEntity::Edge(name) => ValueAccess::Edge(self.get_stack_idx(*name)?),
                     });
                 }
             }
@@ -244,6 +285,7 @@ impl QueryPlan {
         env.instructions.push(Instruction::Halt);
         Ok(Program {
             instructions: env.instructions,
+            accesses: env.accesses,
             returns: env.returns,
         })
     }

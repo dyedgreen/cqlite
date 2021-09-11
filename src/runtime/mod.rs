@@ -1,7 +1,7 @@
 mod program;
 mod vm;
 
-pub(crate) use program::{Program, StackValue};
+pub(crate) use program::{Program, ValueAccess};
 pub(crate) use vm::{Instruction, Status, VirtualMachine};
 
 #[cfg(test)]
@@ -39,7 +39,7 @@ mod tests {
         };
 
         let txn = store.txn().unwrap();
-        let mut vm = VirtualMachine::new(&txn, &code);
+        let mut vm = VirtualMachine::new(&txn, &code, &[]);
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());

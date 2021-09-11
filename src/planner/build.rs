@@ -1,11 +1,11 @@
-use crate::parser::ast;
 use crate::Error;
+use crate::{parser::ast, PropertyValue};
 use std::collections::HashMap;
 
-use super::plan::{Filter, MatchStep, NamedValue, QueryPlan};
+use super::plan::{AccessValue, Filter, MatchStep, NamedEntity, QueryPlan};
 
 pub(crate) struct BuildEnv<'a> {
-    names: HashMap<&'a str, NamedValue>,
+    names: HashMap<&'a str, NamedEntity>,
     next_name: usize,
 }
 
@@ -24,27 +24,27 @@ impl<'a> BuildEnv<'a> {
 
     fn get_node(&self, name: &str) -> Result<Option<usize>, Error> {
         match self.names.get(&name) {
-            Some(NamedValue::Node(name)) => Ok(Some(*name)),
-            Some(NamedValue::Edge(_)) => Err(Error::Todo),
+            Some(NamedEntity::Node(name)) => Ok(Some(*name)),
+            Some(NamedEntity::Edge(_)) => Err(Error::Todo),
             None => Ok(None),
         }
     }
 
     fn get_edge(&self, name: &str) -> Result<Option<usize>, Error> {
         match self.names.get(&name) {
-            Some(NamedValue::Node(_)) => Err(Error::Todo),
-            Some(NamedValue::Edge(name)) => Ok(Some(*name)),
+            Some(NamedEntity::Node(_)) => Err(Error::Todo),
+            Some(NamedEntity::Edge(name)) => Ok(Some(*name)),
             None => Ok(None),
         }
     }
 
     fn create_node(&mut self, name: &'a str) -> Result<usize, Error> {
         match self.names.get(&name) {
-            Some(NamedValue::Node(name)) => Ok(*name),
-            Some(NamedValue::Edge(_)) => Err(Error::Todo),
+            Some(NamedEntity::Node(name)) => Ok(*name),
+            Some(NamedEntity::Edge(_)) => Err(Error::Todo),
             None => {
                 let next_name = self.next_name();
-                self.names.insert(name, NamedValue::Node(next_name));
+                self.names.insert(name, NamedEntity::Node(next_name));
                 Ok(next_name)
             }
         }
@@ -52,14 +52,79 @@ impl<'a> BuildEnv<'a> {
 
     fn create_edge(&mut self, name: &'a str) -> Result<usize, Error> {
         match self.names.get(&name) {
-            Some(NamedValue::Node(_)) => Err(Error::Todo),
-            Some(NamedValue::Edge(name)) => Ok(*name),
+            Some(NamedEntity::Node(_)) => Err(Error::Todo),
+            Some(NamedEntity::Edge(name)) => Ok(*name),
             None => {
                 let next_name = self.next_name();
-                self.names.insert(name, NamedValue::Edge(next_name));
+                self.names.insert(name, NamedEntity::Edge(next_name));
                 Ok(next_name)
             }
         }
+    }
+
+    fn build_access_value(&mut self, expr: &ast::Expression) -> Result<AccessValue, Error> {
+        let access_value = match expr {
+            ast::Expression::Placeholder => unimplemented!(),
+            ast::Expression::Literal(literal) => AccessValue::Constant(match literal {
+                ast::Literal::Integer(i) => PropertyValue::Integer(*i),
+                ast::Literal::Real(r) => PropertyValue::Real(*r),
+                ast::Literal::Boolean(b) => PropertyValue::Boolean(*b),
+                ast::Literal::Text(t) => PropertyValue::Text(t.to_string()),
+                ast::Literal::Null => PropertyValue::Null,
+            }),
+            ast::Expression::Property { name, key } => {
+                match self.names.get(name).ok_or(Error::Todo)? {
+                    NamedEntity::Node(node) => AccessValue::PropertyOfNode {
+                        node: *node,
+                        key: key.to_string(),
+                    },
+                    NamedEntity::Edge(edge) => AccessValue::PropertyOfEdge {
+                        edge: *edge,
+                        key: key.to_string(),
+                    },
+                }
+            }
+            ast::Expression::IdOf(name) => match self.names.get(name).ok_or(Error::Todo)? {
+                NamedEntity::Node(node) => AccessValue::IdOfNode { node: *node },
+                NamedEntity::Edge(edge) => AccessValue::IdOfEdge { edge: *edge },
+            },
+        };
+        Ok(access_value)
+    }
+
+    fn build_filter(&mut self, cond: &ast::Condition) -> Result<Filter, Error> {
+        let filter = match cond {
+            ast::Condition::And(a, b) => Filter::and(self.build_filter(a)?, self.build_filter(b)?),
+            ast::Condition::Or(a, b) => Filter::or(self.build_filter(a)?, self.build_filter(b)?),
+            ast::Condition::Not(inner) => Filter::not(self.build_filter(inner)?),
+
+            ast::Condition::Expression(expr) => Filter::IsTruthy(self.build_access_value(expr)?),
+
+            ast::Condition::Eq(a, b) => {
+                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?)
+            }
+            ast::Condition::Ne(a, b) => Filter::not(Filter::Eq(
+                self.build_access_value(a)?,
+                self.build_access_value(b)?,
+            )),
+
+            ast::Condition::Lt(a, b) => {
+                Filter::Lt(self.build_access_value(a)?, self.build_access_value(b)?)
+            }
+            ast::Condition::Le(a, b) => Filter::or(
+                Filter::Lt(self.build_access_value(a)?, self.build_access_value(b)?),
+                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?),
+            ),
+
+            ast::Condition::Gt(a, b) => {
+                Filter::Gt(self.build_access_value(a)?, self.build_access_value(b)?)
+            }
+            ast::Condition::Ge(a, b) => Filter::or(
+                Filter::Gt(self.build_access_value(a)?, self.build_access_value(b)?),
+                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?),
+            ),
+        };
+        Ok(filter)
     }
 }
 
@@ -75,6 +140,7 @@ impl QueryPlan {
         let mut env = BuildEnv::new();
         let mut steps = vec![];
 
+        // FIXME: this is an eyesore ...
         for clause in &query.match_clauses {
             let mut prev_node_name = if let Some(name) = clause.start.annotation.name {
                 if let Some(name) = env.get_node(name)? {
@@ -254,6 +320,10 @@ impl QueryPlan {
                     }));
                 }
             }
+        }
+
+        for condition in &query.where_clauses {
+            steps.push(MatchStep::Filter(env.build_filter(condition)?));
         }
 
         let mut returns = Vec::with_capacity(query.return_clause.len());

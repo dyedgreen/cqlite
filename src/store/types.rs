@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 // Some general notes
 //
@@ -37,9 +37,9 @@ use std::collections::HashMap;
 // - UpdateNode / UpdateEdge    (takes reference to new key-value pair)
 // - Flush                      (ensures writes are propagated to underlying store)
 
+/// TODO: A single property
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Value {
-    Id(u64),
+pub enum PropertyValue {
     Integer(i64),
     Real(f64),
     Boolean(bool),
@@ -48,24 +48,27 @@ pub enum Value {
     Null,
 }
 
+/// TODO: A single node
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub(crate) id: u64,
     pub(crate) label: String,
-
-    pub(crate) data: HashMap<String, Value>,
+    pub(crate) properties: HashMap<String, PropertyValue>,
+    // TODO: Should these go back into a separate b-tree index(?)
+    // if yes, that would potentially allow for much higher numbers of
+    // connections ...
     pub(crate) origins: Vec<u64>,
     pub(crate) targets: Vec<u64>,
 }
 
+/// TODO: A single edge
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     pub(crate) id: u64,
     pub(crate) label: String,
+    pub(crate) properties: HashMap<String, PropertyValue>,
     pub(crate) origin: u64,
     pub(crate) target: u64,
-
-    pub(crate) data: HashMap<String, Value>,
 }
 
 impl Node {
@@ -77,8 +80,8 @@ impl Node {
         self.label.as_str()
     }
 
-    pub fn entry(&self, key: &str) -> Option<&Value> {
-        self.data.get(key)
+    pub fn property(&self, key: &str) -> &PropertyValue {
+        self.properties.get(key).unwrap_or(&PropertyValue::Null)
     }
 }
 
@@ -91,7 +94,42 @@ impl Edge {
         self.label.as_str()
     }
 
-    pub fn entry(&self, key: &str) -> Option<&Value> {
-        self.data.get(key)
+    pub fn property(&self, key: &str) -> &PropertyValue {
+        self.properties.get(key).unwrap_or(&PropertyValue::Null)
+    }
+}
+
+impl PropertyValue {
+    pub(crate) fn loosely_equals(&self, other: &PropertyValue) -> bool {
+        fn eq(lhs: &PropertyValue, rhs: &PropertyValue) -> bool {
+            use PropertyValue::*;
+            match (lhs, rhs) {
+                (Integer(i), Real(r)) => *i as f64 == *r,
+                _ => false,
+            }
+        }
+        self == other || eq(self, other) || eq(other, self)
+    }
+
+    pub(crate) fn loosely_compare(&self, other: &PropertyValue) -> Option<Ordering> {
+        use PropertyValue::*;
+        match (self, other) {
+            (Integer(lhs), Integer(rhs)) => lhs.partial_cmp(rhs),
+            (Real(lhs), Real(rhs)) => lhs.partial_cmp(rhs),
+            (Real(lhs), Integer(rhs)) => lhs.partial_cmp(&(*rhs as f64)),
+            (Integer(lhs), Real(rhs)) => (*lhs as f64).partial_cmp(rhs),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_truthy(&self) -> bool {
+        match self {
+            Self::Integer(i) => *i != 0,
+            Self::Real(r) => *r != 0.0,
+            Self::Boolean(b) => *b,
+            Self::Text(_) => true,
+            Self::Blob(_) => true,
+            Self::Null => false,
+        }
     }
 }

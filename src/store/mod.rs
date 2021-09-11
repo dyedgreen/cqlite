@@ -7,8 +7,8 @@ use std::path::Path;
 mod iter;
 mod types;
 
-pub(crate) use iter::{EdgeIter, ValueIter};
-pub use types::{Edge, Node};
+pub(crate) use iter::{EdgeIter, EntityIter};
+pub use types::{Edge, Node, PropertyValue};
 
 // alloc the pages to write to
 // them every time ... You can free them
@@ -141,7 +141,7 @@ impl<'e> MutStoreTxn<'e> {
         let node = Node {
             id: self.id_seq(),
             label: label.to_string(),
-            data: HashMap::new(),
+            properties: HashMap::new(),
             origins: Vec::new(),
             targets: Vec::new(),
         };
@@ -156,7 +156,7 @@ impl<'e> MutStoreTxn<'e> {
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
     }
 
-    fn update_node(&mut self, node: &Node) -> Result<(), Error> {
+    pub fn update_node(&mut self, node: &Node) -> Result<(), Error> {
         let node_bytes = bincode::serialize(&node)?;
         btree::del(&mut self.txn, &mut self.nodes, &node.id, None)?;
         btree::put(
@@ -186,7 +186,7 @@ impl<'e> MutStoreTxn<'e> {
         let edge = Edge {
             id: self.id_seq(),
             label: label.to_string(),
-            data: HashMap::new(),
+            properties: HashMap::new(),
             origin,
             target,
         };

@@ -1,20 +1,23 @@
-use crate::store::{Edge, EdgeIter, Node, StoreTxn, ValueIter};
-use crate::Error;
-use sanakirja::{Env, Txn};
+use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
+use crate::{Error, PropertyValue};
+use sanakirja::{Env, Txn}; // FIXME: Should not depend on impl. details of store ...
 
-pub(crate) struct VirtualMachine<'env, 'txn, 'inst> {
+use super::ValueAccess;
+
+pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
 
-    instructions: &'inst [Instruction],
+    instructions: &'prog [Instruction],
+    accesses: &'prog [ValueAccess],
     current_inst: usize,
 
     pub(crate) node_stack: Vec<Node>,
     pub(crate) edge_stack: Vec<Edge>,
-    node_iters: Vec<ValueIter<'txn, Txn<&'env Env>, Node>>,
+    node_iters: Vec<EntityIter<'txn, Txn<&'env Env>, Node>>,
     edge_iters: Vec<EdgeIter>,
 }
 
-/// TODO: Consider to do a crane-lift JIT
+/// TODO: Consider to do a cranelift JIT
 /// instead? (let's see how slow this ends
 /// up being ...)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +49,8 @@ pub(crate) enum Instruction {
 
     CheckNodeLabel(usize, usize, String), // given (jump, node, label), jump is the label is different
     CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
+
+    CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if lhs is not equal to rhs
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -53,17 +58,33 @@ pub(crate) enum Status {
     Halt,
 }
 
-impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
-    pub fn new(txn: &'txn StoreTxn<'env>, instructions: &'inst [Instruction]) -> Self {
+impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
+    pub fn new(
+        txn: &'txn StoreTxn<'env>,
+        instructions: &'prog [Instruction],
+        accesses: &'prog [ValueAccess],
+    ) -> Self {
         Self {
             txn,
             instructions,
+            accesses,
             current_inst: 0,
 
             node_stack: Vec::new(),
             edge_stack: Vec::new(),
             node_iters: Vec::new(),
             edge_iters: Vec::new(),
+        }
+    }
+
+    // TODO: clearer naming ... (rethink the whole thing on paper ...)
+    pub fn access_value(&self, access: usize) -> Result<&PropertyValue, Error> {
+        match &self.accesses[access] {
+            ValueAccess::Constant(val) => Ok(val),
+            ValueAccess::Node(_) => Err(Error::Todo),
+            ValueAccess::Edge(_) => Err(Error::Todo),
+            ValueAccess::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
+            ValueAccess::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
         }
     }
 
@@ -87,7 +108,7 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
 
                 Instruction::IterNodes => {
                     self.node_iters
-                        .push(ValueIter::new(&self.txn.txn, &self.txn.nodes, None)?);
+                        .push(EntityIter::new(&self.txn.txn, &self.txn.nodes, None)?);
                     self.current_inst += 1;
                 }
 
@@ -197,12 +218,23 @@ impl<'env, 'txn, 'inst> VirtualMachine<'env, 'txn, 'inst> {
                         self.current_inst = *jump;
                     }
                 }
+
+                Instruction::CheckEq(jump, lhs, rhs) => {
+                    if self
+                        .access_value(*lhs)?
+                        .loosely_equals(self.access_value(*rhs)?)
+                    {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
             }
         }
     }
 }
 
-impl<'env, 'txn, 'inst> std::fmt::Debug for VirtualMachine<'env, 'txn, 'inst> {
+impl<'env, 'txn, 'prog> std::fmt::Debug for VirtualMachine<'env, 'txn, 'prog> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Program")
             .field("current_inst", &self.current_inst)

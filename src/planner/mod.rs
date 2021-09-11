@@ -32,7 +32,7 @@ mod tests {
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
-            returns: vec![NamedValue::Node(0), NamedValue::Node(2)],
+            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
         };
 
         assert_eq!(plan, QueryPlan::new(&query).unwrap());
@@ -46,7 +46,7 @@ mod tests {
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
-            returns: vec![NamedValue::Node(0), NamedValue::Node(2)],
+            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
         };
 
         let code = {
