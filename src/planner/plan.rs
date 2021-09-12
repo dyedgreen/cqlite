@@ -37,11 +37,11 @@ pub(crate) enum Filter {
     NodeHasLabel { node: usize, label: String },
     EdgeHasLabel { edge: usize, label: String },
 
-    IsTruthy(AccessValue),
+    IsTruthy(LoadProperty),
 
-    Eq(AccessValue, AccessValue),
-    Lt(AccessValue, AccessValue),
-    Gt(AccessValue, AccessValue),
+    Eq(LoadProperty, LoadProperty),
+    Lt(LoadProperty, LoadProperty),
+    Gt(LoadProperty, LoadProperty),
 }
 
 impl Filter {
@@ -64,13 +64,11 @@ pub(crate) enum NamedEntity {
     Edge(usize),
 }
 
-/// TODO: Fix this naming nightmare ...
-/// it could be called 'LoadValue'?
 /// FIXME: The plan does not need to take
 /// ownership here ... (and then these can
 /// be Happy + Copy)
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum AccessValue {
+pub(crate) enum LoadProperty {
     Constant(Property),
     IdOfNode { node: usize },
     IdOfEdge { edge: usize },

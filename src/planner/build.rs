@@ -2,7 +2,7 @@ use crate::Error;
 use crate::{parser::ast, Property};
 use std::collections::HashMap;
 
-use super::plan::{AccessValue, Filter, MatchStep, NamedEntity, QueryPlan};
+use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 
 pub(crate) struct BuildEnv<'a> {
     names: HashMap<&'a str, NamedEntity>,
@@ -62,10 +62,10 @@ impl<'a> BuildEnv<'a> {
         }
     }
 
-    fn build_access_value(&mut self, expr: &ast::Expression) -> Result<AccessValue, Error> {
+    fn build_access_value(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
         let access_value = match expr {
             ast::Expression::Placeholder => unimplemented!(),
-            ast::Expression::Literal(literal) => AccessValue::Constant(match literal {
+            ast::Expression::Literal(literal) => LoadProperty::Constant(match literal {
                 ast::Literal::Integer(i) => Property::Integer(*i),
                 ast::Literal::Real(r) => Property::Real(*r),
                 ast::Literal::Boolean(b) => Property::Boolean(*b),
@@ -74,19 +74,19 @@ impl<'a> BuildEnv<'a> {
             }),
             ast::Expression::Property { name, key } => {
                 match self.names.get(name).ok_or(Error::Todo)? {
-                    NamedEntity::Node(node) => AccessValue::PropertyOfNode {
+                    NamedEntity::Node(node) => LoadProperty::PropertyOfNode {
                         node: *node,
                         key: key.to_string(),
                     },
-                    NamedEntity::Edge(edge) => AccessValue::PropertyOfEdge {
+                    NamedEntity::Edge(edge) => LoadProperty::PropertyOfEdge {
                         edge: *edge,
                         key: key.to_string(),
                     },
                 }
             }
             ast::Expression::IdOf(name) => match self.names.get(name).ok_or(Error::Todo)? {
-                NamedEntity::Node(node) => AccessValue::IdOfNode { node: *node },
-                NamedEntity::Edge(edge) => AccessValue::IdOfEdge { edge: *edge },
+                NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
+                NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
             },
         };
         Ok(access_value)

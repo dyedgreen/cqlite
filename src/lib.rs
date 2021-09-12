@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use planner::QueryPlan;
-use runtime::{Program, Status, ValueAccess, VirtualMachine};
+use runtime::{Access, Program, Status, VirtualMachine};
 use std::path::Path;
 use store::{Store, StoreTxn};
 
@@ -119,22 +119,22 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 impl<'query> Match<'query> {
     pub fn node(&self, idx: usize) -> Result<&Node, Error> {
         match self.query.stmt.program.returns.get(idx) {
-            Some(ValueAccess::Constant(_)) => Err(Error::Todo),
-            Some(ValueAccess::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
-            Some(ValueAccess::Edge(_)) => Err(Error::Todo),
-            Some(ValueAccess::NodeProperty(_, _)) => Err(Error::Todo),
-            Some(ValueAccess::EdgeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::Constant(_)) => Err(Error::Todo),
+            Some(Access::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
+            Some(Access::Edge(_)) => Err(Error::Todo),
+            Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
 
     pub fn edge(&self, idx: usize) -> Result<&Edge, Error> {
         match self.query.stmt.program.returns.get(idx) {
-            Some(ValueAccess::Constant(_)) => Err(Error::Todo),
-            Some(ValueAccess::Node(_)) => Err(Error::Todo),
-            Some(ValueAccess::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
-            Some(ValueAccess::NodeProperty(_, _)) => Err(Error::Todo),
-            Some(ValueAccess::EdgeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::Constant(_)) => Err(Error::Todo),
+            Some(Access::Node(_)) => Err(Error::Todo),
+            Some(Access::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
+            Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }

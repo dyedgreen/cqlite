@@ -1,8 +1,8 @@
-use crate::runtime::{Instruction, Program, ValueAccess};
+use crate::runtime::{Access, Instruction, Program};
 use crate::Error;
 use std::collections::HashMap;
 
-use super::plan::{AccessValue, Filter, MatchStep, NamedEntity, QueryPlan};
+use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
@@ -10,8 +10,8 @@ pub struct CompileEnv {
     edge_stack_len: usize,
 
     instructions: Vec<Instruction>,
-    accesses: Vec<ValueAccess>,
-    returns: Vec<ValueAccess>,
+    accesses: Vec<Access>,
+    returns: Vec<Access>,
 }
 
 impl CompileEnv {
@@ -62,6 +62,7 @@ impl CompileEnv {
                 | CheckIsTarget(t, _, _)
                 | CheckNodeLabel(t, _, _)
                 | CheckEdgeLabel(t, _, _)
+                | CheckTrue(t, _)
                 | CheckEq(t, _, _) => {
                     if *t == from {
                         *t = to;
@@ -83,18 +84,18 @@ impl CompileEnv {
         }
     }
 
-    fn compile_access(&mut self, access: &AccessValue) -> Result<usize, Error> {
+    fn compile_access(&mut self, access: &LoadProperty) -> Result<usize, Error> {
         let access = match access {
-            AccessValue::Constant(val) => ValueAccess::Constant(val.clone()),
-            AccessValue::IdOfNode { .. } => unimplemented!(),
-            AccessValue::IdOfEdge { .. } => unimplemented!(),
-            AccessValue::PropertyOfNode { node, key } => {
+            LoadProperty::Constant(val) => Access::Constant(val.clone()),
+            LoadProperty::IdOfNode { .. } => unimplemented!(),
+            LoadProperty::IdOfEdge { .. } => unimplemented!(),
+            LoadProperty::PropertyOfNode { node, key } => {
                 let node = self.get_stack_idx(*node)?;
-                ValueAccess::NodeProperty(node, key.clone())
+                Access::NodeProperty(node, key.clone())
             }
-            AccessValue::PropertyOfEdge { edge, key } => {
+            LoadProperty::PropertyOfEdge { edge, key } => {
                 let edge = self.get_stack_idx(*edge)?;
-                ValueAccess::EdgeProperty(edge, key.clone())
+                Access::EdgeProperty(edge, key.clone())
             }
         };
         if let Some(idx) =
@@ -165,7 +166,11 @@ impl CompileEnv {
                 ));
             }
 
-            Filter::IsTruthy(_) => unimplemented!(),
+            Filter::IsTruthy(load) => {
+                let acc = self.compile_access(load)?;
+                self.instructions
+                    .push(Instruction::CheckTrue(usize::MAX, acc));
+            }
 
             Filter::Eq(lhs, rhs) => {
                 let lhs = self.compile_access(lhs)?;
@@ -268,8 +273,8 @@ impl CompileEnv {
             if self.returns.is_empty() {
                 for value in &plan.returns {
                     self.returns.push(match value {
-                        NamedEntity::Node(name) => ValueAccess::Node(self.get_stack_idx(*name)?),
-                        NamedEntity::Edge(name) => ValueAccess::Edge(self.get_stack_idx(*name)?),
+                        NamedEntity::Node(name) => Access::Node(self.get_stack_idx(*name)?),
+                        NamedEntity::Edge(name) => Access::Edge(self.get_stack_idx(*name)?),
                     });
                 }
             }

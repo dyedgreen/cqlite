@@ -1,8 +1,8 @@
 mod program;
 mod vm;
 
-pub(crate) use program::{Program, ValueAccess};
-pub(crate) use vm::{Instruction, Status, VirtualMachine};
+pub(crate) use program::Program;
+pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
 
 #[cfg(test)]
 mod tests {

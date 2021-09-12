@@ -2,13 +2,11 @@ use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
 use crate::{Error, Property};
 use sanakirja::{Env, Txn}; // FIXME: Should not depend on impl. details of store ...
 
-use super::ValueAccess;
-
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
 
     instructions: &'prog [Instruction],
-    accesses: &'prog [ValueAccess],
+    accesses: &'prog [Access],
     current_inst: usize,
 
     pub(crate) node_stack: Vec<Node>,
@@ -50,8 +48,23 @@ pub(crate) enum Instruction {
     CheckNodeLabel(usize, usize, String), // given (jump, node, label), jump is the label is different
     CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
 
+    CheckTrue(usize, usize), // given (jump, property), jump if property is truthy
     CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if lhs is not equal to rhs
 }
+
+/// TODO: An instruction to access a value
+/// this is meant to allow accessing nodes, edges, properties, and constants ...
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Access {
+    Constant(Property),
+
+    Node(usize), // node on the stack
+    Edge(usize), // edge on the stack
+
+    NodeProperty(usize, String),
+    EdgeProperty(usize, String),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
     Yield,
@@ -62,7 +75,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     pub fn new(
         txn: &'txn StoreTxn<'env>,
         instructions: &'prog [Instruction],
-        accesses: &'prog [ValueAccess],
+        accesses: &'prog [Access],
     ) -> Self {
         Self {
             txn,
@@ -77,14 +90,13 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    // TODO: clearer naming ... (rethink the whole thing on paper ...)
-    pub fn access_value(&self, access: usize) -> Result<&Property, Error> {
+    pub fn access_property(&self, access: usize) -> Result<&Property, Error> {
         match &self.accesses[access] {
-            ValueAccess::Constant(val) => Ok(val),
-            ValueAccess::Node(_) => Err(Error::Todo),
-            ValueAccess::Edge(_) => Err(Error::Todo),
-            ValueAccess::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
-            ValueAccess::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
+            Access::Constant(val) => Ok(val),
+            Access::Node(_) => Err(Error::Todo),
+            Access::Edge(_) => Err(Error::Todo),
+            Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
+            Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
         }
     }
 
@@ -219,11 +231,18 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
+                Instruction::CheckTrue(jump, access) => {
+                    let prop = self.access_property(*access)?;
+                    if prop.is_truthy() {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
                 Instruction::CheckEq(jump, lhs, rhs) => {
-                    if self
-                        .access_value(*lhs)?
-                        .loosely_equals(self.access_value(*rhs)?)
-                    {
+                    let lhs = self.access_property(*lhs)?;
+                    let rhs = self.access_property(*rhs)?;
+                    if lhs.loosely_equals(rhs) {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
