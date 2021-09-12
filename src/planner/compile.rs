@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 
+const JUMP_PLACEHOLDER: usize = usize::MAX;
+
 pub struct CompileEnv {
     names: HashMap<usize, usize>, // map names to stack position
     node_stack_len: usize,
@@ -111,7 +113,7 @@ impl CompileEnv {
         }
     }
 
-    /// Uses `usize::MAX` as a place-holder for the failed condition jump to
+    /// Uses `JUMP_PLACEHOLDER` as a place-holder for the failed condition jump to
     /// be replaced after the position is known.
     fn compile_filter(&mut self, plan: &QueryPlan, filter: &Filter) -> Result<(), Error> {
         match filter {
@@ -123,7 +125,11 @@ impl CompileEnv {
                 let start = self.instructions.len();
                 self.compile_filter(plan, a)?;
                 let inner_jmp = self.instructions.len();
-                Self::adjust_jumps(&mut self.instructions[start..], usize::MAX, inner_jmp + 1);
+                Self::adjust_jumps(
+                    &mut self.instructions[start..],
+                    JUMP_PLACEHOLDER,
+                    inner_jmp + 1,
+                );
                 self.instructions.push(Instruction::NoOp);
                 self.compile_filter(plan, b)?;
                 self.instructions[inner_jmp] = Instruction::Jump(self.instructions.len());
@@ -132,27 +138,27 @@ impl CompileEnv {
                 let start = self.instructions.len();
                 self.compile_filter(plan, inner)?;
                 let end = self.instructions.len();
-                Self::adjust_jumps(&mut self.instructions[start..], usize::MAX, end + 1);
-                self.instructions.push(Instruction::Jump(usize::MAX));
+                Self::adjust_jumps(&mut self.instructions[start..], JUMP_PLACEHOLDER, end + 1);
+                self.instructions.push(Instruction::Jump(JUMP_PLACEHOLDER));
             }
 
             Filter::IsOrigin { node, edge } => {
                 let node = self.get_stack_idx(*node)?;
                 let edge = self.get_stack_idx(*edge)?;
                 self.instructions
-                    .push(Instruction::CheckIsOrigin(usize::MAX, node, edge))
+                    .push(Instruction::CheckIsOrigin(JUMP_PLACEHOLDER, node, edge))
             }
             Filter::IsTarget { node, edge } => {
                 let node = self.get_stack_idx(*node)?;
                 let edge = self.get_stack_idx(*edge)?;
                 self.instructions
-                    .push(Instruction::CheckIsTarget(usize::MAX, node, edge))
+                    .push(Instruction::CheckIsTarget(JUMP_PLACEHOLDER, node, edge))
             }
 
             Filter::NodeHasLabel { node, label } => {
                 let node = self.get_stack_idx(*node)?;
                 self.instructions.push(Instruction::CheckNodeLabel(
-                    usize::MAX,
+                    JUMP_PLACEHOLDER,
                     node,
                     label.clone(),
                 ));
@@ -160,7 +166,7 @@ impl CompileEnv {
             Filter::EdgeHasLabel { edge, label } => {
                 let edge = self.get_stack_idx(*edge)?;
                 self.instructions.push(Instruction::CheckEdgeLabel(
-                    usize::MAX,
+                    JUMP_PLACEHOLDER,
                     edge,
                     label.clone(),
                 ));
@@ -169,14 +175,14 @@ impl CompileEnv {
             Filter::IsTruthy(load) => {
                 let acc = self.compile_access(load)?;
                 self.instructions
-                    .push(Instruction::CheckTrue(usize::MAX, acc));
+                    .push(Instruction::CheckTrue(JUMP_PLACEHOLDER, acc));
             }
 
             Filter::Eq(lhs, rhs) => {
                 let lhs = self.compile_access(lhs)?;
                 let rhs = self.compile_access(rhs)?;
                 self.instructions
-                    .push(Instruction::CheckEq(usize::MAX, lhs, rhs));
+                    .push(Instruction::CheckEq(JUMP_PLACEHOLDER, lhs, rhs));
             }
             Filter::Gt(_, _) => unimplemented!(),
             Filter::Lt(_, _) => unimplemented!(),
@@ -264,7 +270,11 @@ impl CompileEnv {
                     let filter_end = self.instructions.len();
                     self.compile_step(plan, &steps[1..])?;
                     let end = self.instructions.len();
-                    Self::adjust_jumps(&mut self.instructions[start..filter_end], usize::MAX, end);
+                    Self::adjust_jumps(
+                        &mut self.instructions[start..filter_end],
+                        JUMP_PLACEHOLDER,
+                        end,
+                    );
                 }
             }
             Ok(())
