@@ -1,5 +1,5 @@
 use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
-use crate::{Error, PropertyValue};
+use crate::{Error, Property};
 use sanakirja::{Env, Txn}; // FIXME: Should not depend on impl. details of store ...
 
 use super::ValueAccess;
@@ -78,7 +78,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     }
 
     // TODO: clearer naming ... (rethink the whole thing on paper ...)
-    pub fn access_value(&self, access: usize) -> Result<&PropertyValue, Error> {
+    pub fn access_value(&self, access: usize) -> Result<&Property, Error> {
         match &self.accesses[access] {
             ValueAccess::Constant(val) => Ok(val),
             ValueAccess::Node(_) => Err(Error::Todo),

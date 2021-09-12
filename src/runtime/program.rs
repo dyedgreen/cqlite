@@ -1,5 +1,5 @@
 use crate::runtime::Instruction;
-use crate::store::PropertyValue;
+use crate::store::Property;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Program {
@@ -13,7 +13,7 @@ pub(crate) struct Program {
 /// this is meant to allow accessing nodes, edges, properties, and constants ...
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ValueAccess {
-    Constant(PropertyValue),
+    Constant(Property),
 
     Node(usize), // node on the stack
     Edge(usize), // edge on the stack

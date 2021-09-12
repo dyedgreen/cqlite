@@ -1,4 +1,4 @@
-use crate::store::PropertyValue;
+use crate::store::Property; // TODO: Should it directly use this?
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct QueryPlan {
@@ -71,7 +71,7 @@ pub(crate) enum NamedEntity {
 /// be Happy + Copy)
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AccessValue {
-    Constant(PropertyValue),
+    Constant(Property),
     IdOfNode { node: usize },
     IdOfEdge { edge: usize },
     PropertyOfNode { node: usize, key: String },

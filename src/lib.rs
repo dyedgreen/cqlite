@@ -13,7 +13,7 @@ pub(crate) mod runtime;
 pub(crate) mod store;
 
 pub use error::Error;
-pub use store::{Edge, Node, PropertyValue};
+pub use store::{Edge, Node, Property};
 
 /// TODO: A handle to the database
 pub struct Graph {
@@ -298,8 +298,7 @@ mod tests {
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
         let mut a = txn.create_node("PERSON").unwrap();
-        a.properties
-            .insert("test".into(), PropertyValue::Integer(42));
+        a.properties.insert("test".into(), Property::Integer(42));
         txn.update_node(&a).unwrap();
         let b = txn.create_node("PERSON").unwrap();
         txn.create_edge("KNOWS", a.id(), b.id()).unwrap();

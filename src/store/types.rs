@@ -39,7 +39,7 @@ use std::{cmp::Ordering, collections::HashMap};
 
 /// TODO: A single property
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum PropertyValue {
+pub enum Property {
     Integer(i64),
     Real(f64),
     Boolean(bool),
@@ -53,7 +53,7 @@ pub enum PropertyValue {
 pub struct Node {
     pub(crate) id: u64,
     pub(crate) label: String,
-    pub(crate) properties: HashMap<String, PropertyValue>,
+    pub(crate) properties: HashMap<String, Property>,
     // TODO: Should these go back into a separate b-tree index(?)
     // if yes, that would potentially allow for much higher numbers of
     // connections ...
@@ -66,7 +66,7 @@ pub struct Node {
 pub struct Edge {
     pub(crate) id: u64,
     pub(crate) label: String,
-    pub(crate) properties: HashMap<String, PropertyValue>,
+    pub(crate) properties: HashMap<String, Property>,
     pub(crate) origin: u64,
     pub(crate) target: u64,
 }
@@ -80,8 +80,8 @@ impl Node {
         self.label.as_str()
     }
 
-    pub fn property(&self, key: &str) -> &PropertyValue {
-        self.properties.get(key).unwrap_or(&PropertyValue::Null)
+    pub fn property(&self, key: &str) -> &Property {
+        self.properties.get(key).unwrap_or(&Property::Null)
     }
 }
 
@@ -94,15 +94,15 @@ impl Edge {
         self.label.as_str()
     }
 
-    pub fn property(&self, key: &str) -> &PropertyValue {
-        self.properties.get(key).unwrap_or(&PropertyValue::Null)
+    pub fn property(&self, key: &str) -> &Property {
+        self.properties.get(key).unwrap_or(&Property::Null)
     }
 }
 
-impl PropertyValue {
-    pub(crate) fn loosely_equals(&self, other: &PropertyValue) -> bool {
-        fn eq(lhs: &PropertyValue, rhs: &PropertyValue) -> bool {
-            use PropertyValue::*;
+impl Property {
+    pub(crate) fn loosely_equals(&self, other: &Property) -> bool {
+        fn eq(lhs: &Property, rhs: &Property) -> bool {
+            use Property::*;
             match (lhs, rhs) {
                 (Integer(i), Real(r)) => *i as f64 == *r,
                 _ => false,
@@ -111,8 +111,8 @@ impl PropertyValue {
         self == other || eq(self, other) || eq(other, self)
     }
 
-    pub(crate) fn loosely_compare(&self, other: &PropertyValue) -> Option<Ordering> {
-        use PropertyValue::*;
+    pub(crate) fn loosely_compare(&self, other: &Property) -> Option<Ordering> {
+        use Property::*;
         match (self, other) {
             (Integer(lhs), Integer(rhs)) => lhs.partial_cmp(rhs),
             (Real(lhs), Real(rhs)) => lhs.partial_cmp(rhs),

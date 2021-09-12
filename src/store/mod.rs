@@ -8,7 +8,7 @@ mod iter;
 mod types;
 
 pub(crate) use iter::{EdgeIter, EntityIter};
-pub use types::{Edge, Node, PropertyValue};
+pub use types::{Edge, Node, Property};
 
 // alloc the pages to write to
 // them every time ... You can free them

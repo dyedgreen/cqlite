@@ -1,5 +1,5 @@
 use crate::Error;
-use crate::{parser::ast, PropertyValue};
+use crate::{parser::ast, Property};
 use std::collections::HashMap;
 
 use super::plan::{AccessValue, Filter, MatchStep, NamedEntity, QueryPlan};
@@ -66,11 +66,11 @@ impl<'a> BuildEnv<'a> {
         let access_value = match expr {
             ast::Expression::Placeholder => unimplemented!(),
             ast::Expression::Literal(literal) => AccessValue::Constant(match literal {
-                ast::Literal::Integer(i) => PropertyValue::Integer(*i),
-                ast::Literal::Real(r) => PropertyValue::Real(*r),
-                ast::Literal::Boolean(b) => PropertyValue::Boolean(*b),
-                ast::Literal::Text(t) => PropertyValue::Text(t.to_string()),
-                ast::Literal::Null => PropertyValue::Null,
+                ast::Literal::Integer(i) => Property::Integer(*i),
+                ast::Literal::Real(r) => Property::Real(*r),
+                ast::Literal::Boolean(b) => Property::Boolean(*b),
+                ast::Literal::Text(t) => Property::Text(t.to_string()),
+                ast::Literal::Null => Property::Null,
             }),
             ast::Expression::Property { name, key } => {
                 match self.names.get(name).ok_or(Error::Todo)? {
