@@ -2,7 +2,7 @@ mod build;
 mod compile;
 mod plan;
 
-pub(crate) use plan::QueryPlan;
+pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 
 #[cfg(test)]
 mod tests {

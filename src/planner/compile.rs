@@ -1,8 +1,7 @@
+use crate::planner::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 use crate::runtime::{Access, Instruction, Program};
 use crate::Error;
 use std::collections::HashMap;
-
-use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
 
 const JUMP_PLACEHOLDER: usize = usize::MAX;
 
@@ -65,7 +64,9 @@ impl CompileEnv {
                 | CheckNodeLabel(t, _, _)
                 | CheckEdgeLabel(t, _, _)
                 | CheckTrue(t, _)
-                | CheckEq(t, _, _) => {
+                | CheckEq(t, _, _)
+                | CheckLt(t, _, _)
+                | CheckGt(t, _, _) => {
                     if *t == from {
                         *t = to;
                     }
@@ -184,8 +185,18 @@ impl CompileEnv {
                 self.instructions
                     .push(Instruction::CheckEq(JUMP_PLACEHOLDER, lhs, rhs));
             }
-            Filter::Gt(_, _) => unimplemented!(),
-            Filter::Lt(_, _) => unimplemented!(),
+            Filter::Lt(lhs, rhs) => {
+                let lhs = self.compile_access(lhs)?;
+                let rhs = self.compile_access(rhs)?;
+                self.instructions
+                    .push(Instruction::CheckLt(JUMP_PLACEHOLDER, lhs, rhs));
+            }
+            Filter::Gt(lhs, rhs) => {
+                let lhs = self.compile_access(lhs)?;
+                let rhs = self.compile_access(rhs)?;
+                self.instructions
+                    .push(Instruction::CheckGt(JUMP_PLACEHOLDER, lhs, rhs));
+            }
         }
         Ok(())
     }

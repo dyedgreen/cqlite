@@ -1,6 +1,7 @@
 use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
 use crate::{Error, Property};
-use sanakirja::{Env, Txn}; // FIXME: Should not depend on impl. details of store ...
+use sanakirja::{Env, Txn};
+use std::cmp::Ordering; // FIXME: Should not depend on impl. details of store ...
 
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
@@ -49,7 +50,9 @@ pub(crate) enum Instruction {
     CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
 
     CheckTrue(usize, usize), // given (jump, property), jump if property is truthy
-    CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if lhs is not equal to rhs
+    CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs = rhs
+    CheckLt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs < rhs
+    CheckGt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs > rhs
 }
 
 /// TODO: An instruction to access a value
@@ -58,8 +61,8 @@ pub(crate) enum Instruction {
 pub(crate) enum Access {
     Constant(Property),
 
-    Node(usize), // node on the stack
-    Edge(usize), // edge on the stack
+    Node(usize), // on the stack
+    Edge(usize), // on the stack
 
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
@@ -243,6 +246,24 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
                     if lhs.loosely_equals(rhs) {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
+                Instruction::CheckLt(jump, lhs, rhs) => {
+                    let lhs = self.access_property(*lhs)?;
+                    let rhs = self.access_property(*rhs)?;
+                    if let Some(Ordering::Less) = lhs.loosely_compare(rhs) {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
+                Instruction::CheckGt(jump, lhs, rhs) => {
+                    let lhs = self.access_property(*lhs)?;
+                    let rhs = self.access_property(*rhs)?;
+                    if let Some(Ordering::Greater) = lhs.loosely_compare(rhs) {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
