@@ -1,7 +1,9 @@
 use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
 use crate::{Error, Property};
+use std::cmp::Ordering;
+
+// FIXME: Should not depend on impl. details of store ...
 use sanakirja::{Env, Txn};
-use std::cmp::Ordering; // FIXME: Should not depend on impl. details of store ...
 
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
@@ -49,6 +51,9 @@ pub(crate) enum Instruction {
     CheckNodeLabel(usize, usize, String), // given (jump, node, label), jump is the label is different
     CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
 
+    CheckNodeId(usize, usize, usize), // given (jump, node, id), jump id access(id) != node.id
+    CheckEdgeId(usize, usize, usize), // given (jump, node, id), jump id access(id) != node.id
+
     CheckTrue(usize, usize), // given (jump, property), jump if property is truthy
     CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs = rhs
     CheckLt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs < rhs
@@ -59,11 +64,9 @@ pub(crate) enum Instruction {
 /// this is meant to allow accessing nodes, edges, properties, and constants ...
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Access {
-    Constant(Property),
-
     Node(usize), // on the stack
     Edge(usize), // on the stack
-
+    Constant(Property),
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
 }
@@ -95,9 +98,9 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
     pub fn access_property(&self, access: usize) -> Result<&Property, Error> {
         match &self.accesses[access] {
-            Access::Constant(val) => Ok(val),
             Access::Node(_) => Err(Error::Todo),
             Access::Edge(_) => Err(Error::Todo),
+            Access::Constant(val) => Ok(val),
             Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
             Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
         }
@@ -228,6 +231,25 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::CheckEdgeLabel(jump, edge, label) => {
                     let edge = &self.edge_stack[*edge];
                     if edge.label.as_str() == label.as_str() {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
+
+                Instruction::CheckNodeId(jump, node, id) => {
+                    let node = &self.node_stack[*node];
+                    let id = self.access_property(*id)?.cast_to_id()?;
+                    if node.id == id {
+                        self.current_inst += 1;
+                    } else {
+                        self.current_inst = *jump;
+                    }
+                }
+                Instruction::CheckEdgeId(jump, edge, id) => {
+                    let edge = &self.node_stack[*edge];
+                    let id = self.access_property(*id)?.cast_to_id()?;
+                    if edge.id == id {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;

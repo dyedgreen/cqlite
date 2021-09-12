@@ -63,6 +63,8 @@ impl CompileEnv {
                 | CheckIsTarget(t, _, _)
                 | CheckNodeLabel(t, _, _)
                 | CheckEdgeLabel(t, _, _)
+                | CheckNodeId(t, _, _)
+                | CheckEdgeId(t, _, _)
                 | CheckTrue(t, _)
                 | CheckEq(t, _, _)
                 | CheckLt(t, _, _)
@@ -90,8 +92,6 @@ impl CompileEnv {
     fn compile_access(&mut self, access: &LoadProperty) -> Result<usize, Error> {
         let access = match access {
             LoadProperty::Constant(val) => Access::Constant(val.clone()),
-            LoadProperty::IdOfNode { .. } => unimplemented!(),
-            LoadProperty::IdOfEdge { .. } => unimplemented!(),
             LoadProperty::PropertyOfNode { node, key } => {
                 let node = self.get_stack_idx(*node)?;
                 Access::NodeProperty(node, key.clone())
@@ -171,6 +171,19 @@ impl CompileEnv {
                     edge,
                     label.clone(),
                 ));
+            }
+
+            Filter::NodeHasId { node, id } => {
+                let node = self.get_stack_idx(*node)?;
+                let acc = self.compile_access(id)?;
+                self.instructions
+                    .push(Instruction::CheckNodeId(JUMP_PLACEHOLDER, node, acc));
+            }
+            Filter::EdgeHasId { edge, id } => {
+                let edge = self.get_stack_idx(*edge)?;
+                let acc = self.compile_access(id)?;
+                self.instructions
+                    .push(Instruction::CheckNodeId(JUMP_PLACEHOLDER, edge, acc));
             }
 
             Filter::IsTruthy(load) => {

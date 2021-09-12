@@ -108,7 +108,6 @@ pub enum Expression<'src> {
     Placeholder,
     Literal(Literal<'src>),
     Property { name: &'src str, key: &'src str },
-    IdOf(&'src str),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,6 +126,8 @@ pub enum Condition<'src> {
 
     Gt(Expression<'src>, Expression<'src>),
     Ge(Expression<'src>, Expression<'src>),
+
+    IdEq(&'src str, Expression<'src>),
 }
 
 impl<'src> Condition<'src> {

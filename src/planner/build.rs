@@ -62,7 +62,7 @@ impl<'a> BuildEnv<'a> {
         }
     }
 
-    fn build_access_value(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
+    fn build_load_property(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
         let access_value = match expr {
             ast::Expression::Placeholder => unimplemented!(),
             ast::Expression::Literal(literal) => LoadProperty::Constant(match literal {
@@ -84,10 +84,6 @@ impl<'a> BuildEnv<'a> {
                     },
                 }
             }
-            ast::Expression::IdOf(name) => match self.names.get(name).ok_or(Error::Todo)? {
-                NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
-                NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
-            },
         };
         Ok(access_value)
     }
@@ -98,31 +94,42 @@ impl<'a> BuildEnv<'a> {
             ast::Condition::Or(a, b) => Filter::or(self.build_filter(a)?, self.build_filter(b)?),
             ast::Condition::Not(inner) => Filter::not(self.build_filter(inner)?),
 
-            ast::Condition::Expression(expr) => Filter::IsTruthy(self.build_access_value(expr)?),
+            ast::Condition::Expression(expr) => Filter::IsTruthy(self.build_load_property(expr)?),
 
             ast::Condition::Eq(a, b) => {
-                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?)
+                Filter::Eq(self.build_load_property(a)?, self.build_load_property(b)?)
             }
             ast::Condition::Ne(a, b) => Filter::not(Filter::Eq(
-                self.build_access_value(a)?,
-                self.build_access_value(b)?,
+                self.build_load_property(a)?,
+                self.build_load_property(b)?,
             )),
 
             ast::Condition::Lt(a, b) => {
-                Filter::Lt(self.build_access_value(a)?, self.build_access_value(b)?)
+                Filter::Lt(self.build_load_property(a)?, self.build_load_property(b)?)
             }
             ast::Condition::Le(a, b) => Filter::or(
-                Filter::Lt(self.build_access_value(a)?, self.build_access_value(b)?),
-                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?),
+                Filter::Lt(self.build_load_property(a)?, self.build_load_property(b)?),
+                Filter::Eq(self.build_load_property(a)?, self.build_load_property(b)?),
             ),
 
             ast::Condition::Gt(a, b) => {
-                Filter::Gt(self.build_access_value(a)?, self.build_access_value(b)?)
+                Filter::Gt(self.build_load_property(a)?, self.build_load_property(b)?)
             }
             ast::Condition::Ge(a, b) => Filter::or(
-                Filter::Gt(self.build_access_value(a)?, self.build_access_value(b)?),
-                Filter::Eq(self.build_access_value(a)?, self.build_access_value(b)?),
+                Filter::Gt(self.build_load_property(a)?, self.build_load_property(b)?),
+                Filter::Eq(self.build_load_property(a)?, self.build_load_property(b)?),
             ),
+
+            ast::Condition::IdEq(name, value) => match self.names.get(name).ok_or(Error::Todo)? {
+                NamedEntity::Node(node) => Filter::NodeHasId {
+                    node: *node,
+                    id: self.build_load_property(value)?,
+                },
+                NamedEntity::Edge(edge) => Filter::EdgeHasId {
+                    edge: *edge,
+                    id: self.build_load_property(value)?,
+                },
+            },
         };
         Ok(filter)
     }

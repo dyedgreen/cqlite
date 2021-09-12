@@ -84,7 +84,6 @@ peg::parser! {
             = "?" { Expression::Placeholder }
             / l:literal() { Expression::Literal(l) }
             / name:ident() "." key:ident() { Expression::Property { name, key } }
-            / kw_id() _* "(" _* name:ident() _* ")" { Expression::IdOf(name) }
 
         rule condition() -> Condition<'input>= precedence!{
             a:(@) __* kw_and() __* b:@ { Condition::and(a, b) }
@@ -98,6 +97,8 @@ peg::parser! {
             a:expression() _* "<=" _* b:expression() { Condition::Le(a, b) }
             a:expression() _* ">"  _* b:expression() { Condition::Gt(a, b) }
             a:expression() _* ">=" _* b:expression() { Condition::Ge(a, b) }
+            kw_id() _* "(" _* n:ident() _* ")" _* "=" _* e:expression() { Condition::IdEq(n, e) }
+            e:expression() _* "=" _* kw_id() _* "(" _* n:ident() _* ")" { Condition::IdEq(n, e) }
             --
             e:expression() { Condition::Expression(e) }
             "(" __* c:condition() __* ")" { c }
@@ -279,8 +280,8 @@ mod tests {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![],
                 }],
-                where_clauses: vec![Condition::Eq(
-                    Expression::IdOf("a"),
+                where_clauses: vec![Condition::IdEq(
+                    "a",
                     Expression::Literal(Literal::Integer(42))
                 )],
                 return_clause: vec!["a"],

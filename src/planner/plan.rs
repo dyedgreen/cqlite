@@ -34,8 +34,12 @@ pub(crate) enum Filter {
 
     IsOrigin { node: usize, edge: usize },
     IsTarget { node: usize, edge: usize },
+
     NodeHasLabel { node: usize, label: String },
     EdgeHasLabel { edge: usize, label: String },
+
+    NodeHasId { node: usize, id: LoadProperty },
+    EdgeHasId { edge: usize, id: LoadProperty },
 
     IsTruthy(LoadProperty),
 
@@ -70,8 +74,6 @@ pub(crate) enum NamedEntity {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LoadProperty {
     Constant(Property),
-    IdOfNode { node: usize },
-    IdOfEdge { edge: usize },
     PropertyOfNode { node: usize, key: String },
     PropertyOfEdge { edge: usize, key: String },
 }

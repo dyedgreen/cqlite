@@ -292,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn run_a_edge_b_with_where() {
+    fn run_a_edge_b_with_where_property() {
         let graph = Graph::open_anon().unwrap();
 
         // TODO
@@ -319,6 +319,35 @@ mod tests {
         let result = matches.step().unwrap().unwrap();
         assert_eq!(a.id(), result.node(0).unwrap().id());
         assert_eq!(b.id(), result.node(1).unwrap().id());
+
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_a_edge_b_with_where_id() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let a = txn.create_node("PERSON").unwrap();
+        let b = txn.create_node("PERSON").unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id()).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph
+            .prepare(
+                "
+                MATCH (a:PERSON)
+                WHERE 1 = ID ( a )
+                RETURN a
+                ",
+            )
+            .unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&txn).unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!(b.id(), result.node(0).unwrap().id());
 
         assert!(matches.step().unwrap().is_none());
     }
