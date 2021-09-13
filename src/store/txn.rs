@@ -2,10 +2,6 @@ use crate::Error;
 use sanakirja::{AllocPage, Commit, Env, LoadPage, MutTxn, RootDb, RootPage, Txn};
 use std::borrow::Borrow;
 
-/// TODO: A txn that may or may not be
-/// mutable ...
-/// TODO: Do we want it like this (dynamic check for
-/// mut txn at runtime) or have two transaction types?
 pub(crate) enum DynTxn<E: Borrow<Env>> {
     Txn(Txn<E>),
     MutTxn(MutTxn<E, ()>),

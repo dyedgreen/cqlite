@@ -9,7 +9,7 @@ mod iter;
 mod txn;
 mod types;
 
-pub(crate) use iter::{DeserializeIter as EntityIter, EdgeIter};
+pub(crate) use iter::{EdgeIter, NodeIter};
 pub use types::{Edge, Node, Property};
 
 // alloc the pages to write to
@@ -111,6 +111,12 @@ impl Store {
 }
 
 impl<'e> StoreTxn<'e> {
+    pub fn id_seq(&mut self) -> Result<u64, Error> {
+        let id = self.txn.root(ID_SQUENCE).unwrap_or(0);
+        self.txn.set_root(ID_SQUENCE, id + 1)?;
+        Ok(id)
+    }
+
     pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
         let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
         if let Some((&entry_id, bytes)) = entry {
@@ -138,22 +144,12 @@ impl<'e> StoreTxn<'e> {
             Ok(None)
         }
     }
-}
-
-impl<'e> StoreTxn<'e> {
-    pub fn id_seq(&mut self) -> Result<u64, Error> {
-        let id = self.txn.root(ID_SQUENCE).unwrap_or(0);
-        self.txn.set_root(ID_SQUENCE, id + 1)?;
-        Ok(id)
-    }
 
     pub fn create_node(&mut self, label: &str) -> Result<Node, Error> {
         let node = Node {
             id: self.id_seq()?,
             label: label.to_string(),
             properties: HashMap::new(),
-            origins: Vec::new(),
-            targets: Vec::new(),
         };
         let node_bytes = bincode::serialize(&node)?;
         btree::put(
@@ -162,6 +158,7 @@ impl<'e> StoreTxn<'e> {
             &node.id,
             node_bytes.as_ref(),
         )?;
+        // TODO: Only return node?
         let entry = btree::get(&self.txn, &self.nodes, &node.id, None)?.ok_or(Error::Todo)?;
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
     }
@@ -178,7 +175,12 @@ impl<'e> StoreTxn<'e> {
         Ok(())
     }
 
-    pub fn create_edge(&mut self, label: &str, origin: u64, target: u64) -> Result<Edge, Error> {
+    pub fn unchecked_create_edge(
+        &mut self,
+        label: &str,
+        origin: u64,
+        target: u64,
+    ) -> Result<Edge, Error> {
         let edge = Edge {
             id: self.id_seq()?,
             label: label.to_string(),
@@ -186,14 +188,6 @@ impl<'e> StoreTxn<'e> {
             origin,
             target,
         };
-
-        let mut origin = self.get_node(origin)?.ok_or(Error::Todo)?;
-        origin.origins.push(edge.id);
-        self.update_node(&origin)?;
-        let mut target = self.get_node(target)?.ok_or(Error::Todo)?;
-        target.targets.push(edge.id);
-        self.update_node(&target)?;
-
         let edge_bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
         btree::put(
             &mut self.txn,
@@ -201,9 +195,21 @@ impl<'e> StoreTxn<'e> {
             &edge.id,
             edge_bytes.as_ref(),
         )?;
-
+        btree::put(&mut self.txn, &mut self.origins, &edge.origin, &edge.id)?;
+        btree::put(&mut self.txn, &mut self.targets, &edge.target, &edge.id)?;
+        // TODO: only return edge?
         let entry = btree::get(&self.txn, &self.edges, &edge.id, None)?.ok_or(Error::Todo)?;
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
+    }
+
+    pub fn create_edge(&mut self, label: &str, origin: u64, target: u64) -> Result<Edge, Error> {
+        let origin_exists = self.get_node(origin)?.is_some();
+        let target_exists = self.get_node(target)?.is_some();
+        if !origin_exists || !target_exists {
+            Err(Error::Todo)
+        } else {
+            self.unchecked_create_edge(label, origin, target)
+        }
     }
 
     pub fn commit(mut self) -> Result<(), Error> {

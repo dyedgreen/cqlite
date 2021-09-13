@@ -248,6 +248,7 @@ mod tests {
 
         let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
         let txn = graph.txn().unwrap();
+
         let mut matches = stmt.query(&txn).unwrap();
 
         let result = matches.step().unwrap().unwrap();

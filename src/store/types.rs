@@ -23,8 +23,8 @@ use std::{cmp::Ordering, collections::HashMap, convert::TryInto};
 // |- HEADER (20 bytes) ---------------------------------------------| ...
 // | id (u64) | kind_len (u32) | origin_len (u32) | target_len (u32) | ...
 //
-// ... |- KIND -|- ORIGINS -|- TARGETS -|- DATA ---------------|
-// ... | [u8]   | [u64]     | [u64]     | [u8] (some encoding) |
+// ... |- KIND -|- DATA ---------------|
+// ... | [u8]   | [u8] (some encoding) |
 //
 // Currently all nodes are owned, but this can and should change in the future.
 // The storage interface should provide granular methods like:
@@ -50,28 +50,12 @@ pub enum Property {
     Null,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PropertyRef<'p> {
-    Integer(i64),
-    Real(f64),
-    Boolean(bool),
-    Text(&'p str),
-    Blob(&'p [u8]),
-    Null,
-}
-
 /// TODO: A single node
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub(crate) id: u64,
     pub(crate) label: String,
     pub(crate) properties: HashMap<String, Property>,
-
-    // TODO: Should these go back into a separate b-tree index(?)
-    // if yes, that would potentially allow for much higher numbers of
-    // connections ...
-    pub(crate) origins: Vec<u64>,
-    pub(crate) targets: Vec<u64>,
 }
 
 /// TODO: A single edge

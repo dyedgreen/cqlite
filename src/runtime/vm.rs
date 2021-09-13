@@ -1,4 +1,4 @@
-use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
+use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn};
 use crate::{Error, Property};
 use std::cmp::Ordering;
 
@@ -11,8 +11,8 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
 
     pub(crate) node_stack: Vec<Node>,
     pub(crate) edge_stack: Vec<Edge>,
-    node_iters: Vec<EntityIter<'txn, Node>>,
-    edge_iters: Vec<EdgeIter>,
+    node_iters: Vec<NodeIter<'txn>>,
+    edge_iters: Vec<EdgeIter<'txn>>,
 }
 
 /// TODO: Consider to do a cranelift JIT
@@ -123,30 +123,30 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::IterNodes => {
                     self.node_iters
-                        .push(EntityIter::new(&self.txn.txn, &self.txn.nodes, None)?);
+                        .push(NodeIter::new(&self.txn.txn, &self.txn.nodes, None)?);
                     self.current_inst += 1;
                 }
 
                 Instruction::IterOriginEdges(node) => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::origins(node));
+                    self.edge_iters.push(EdgeIter::origins(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
                 Instruction::IterTargetEdges(node) => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::targets(node));
+                    self.edge_iters.push(EdgeIter::targets(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
                 Instruction::IterBothEdges(node) => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::both(node));
+                    self.edge_iters.push(EdgeIter::both(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
 
                 Instruction::NextNode(jump) => {
                     let iter = self.node_iters.last_mut().unwrap();
-                    if let Some(node) = iter.next() {
-                        self.node_stack.push(node?);
+                    if let Some(entry) = iter.next() {
+                        self.node_stack.push(entry?.1);
                         self.current_inst += 1;
                     } else {
                         self.node_iters.pop();
@@ -157,7 +157,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let iter = self.edge_iters.last_mut().unwrap();
                     if let Some(edge_id) = iter.next() {
                         self.edge_stack
-                            .push(self.txn.get_edge(edge_id)?.ok_or(Error::Todo)?);
+                            .push(self.txn.get_edge(edge_id?)?.ok_or(Error::Todo)?);
                         self.current_inst += 1;
                     } else {
                         self.edge_iters.pop();
