@@ -117,7 +117,7 @@ impl<'e> StoreTxn<'e> {
         Ok(id)
     }
 
-    pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
+    pub fn load_node(&self, id: u64) -> Result<Option<Node>, Error> {
         let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
         if let Some((&entry_id, bytes)) = entry {
             if entry_id == id {
@@ -131,7 +131,7 @@ impl<'e> StoreTxn<'e> {
         }
     }
 
-    pub fn get_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
+    pub fn load_edge(&self, id: u64) -> Result<Option<Edge>, Error> {
         let entry = btree::get(&self.txn, &self.edges, &id, None)?;
         if let Some((&entry_id, bytes)) = entry {
             if entry_id == id {
@@ -145,11 +145,15 @@ impl<'e> StoreTxn<'e> {
         }
     }
 
-    pub fn create_node(&mut self, label: &str) -> Result<Node, Error> {
+    pub fn create_node(
+        &mut self,
+        label: &str,
+        properties: Option<HashMap<String, Property>>,
+    ) -> Result<Node, Error> {
         let node = Node {
             id: self.id_seq()?,
             label: label.to_string(),
-            properties: HashMap::new(),
+            properties: properties.unwrap_or(HashMap::new()),
         };
         let node_bytes = bincode::serialize(&node)?;
         btree::put(
@@ -158,9 +162,7 @@ impl<'e> StoreTxn<'e> {
             &node.id,
             node_bytes.as_ref(),
         )?;
-        // TODO: Only return node?
-        let entry = btree::get(&self.txn, &self.nodes, &node.id, None)?.ok_or(Error::Todo)?;
-        Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
+        Ok(node)
     }
 
     pub fn update_node(&mut self, node: &Node) -> Result<(), Error> {
@@ -180,11 +182,12 @@ impl<'e> StoreTxn<'e> {
         label: &str,
         origin: u64,
         target: u64,
+        properties: Option<HashMap<String, Property>>,
     ) -> Result<Edge, Error> {
         let edge = Edge {
             id: self.id_seq()?,
             label: label.to_string(),
-            properties: HashMap::new(),
+            properties: properties.unwrap_or(HashMap::new()),
             origin,
             target,
         };
@@ -197,19 +200,35 @@ impl<'e> StoreTxn<'e> {
         )?;
         btree::put(&mut self.txn, &mut self.origins, &edge.origin, &edge.id)?;
         btree::put(&mut self.txn, &mut self.targets, &edge.target, &edge.id)?;
-        // TODO: only return edge?
-        let entry = btree::get(&self.txn, &self.edges, &edge.id, None)?.ok_or(Error::Todo)?;
-        Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
+        Ok(edge)
     }
 
-    pub fn create_edge(&mut self, label: &str, origin: u64, target: u64) -> Result<Edge, Error> {
-        let origin_exists = self.get_node(origin)?.is_some();
-        let target_exists = self.get_node(target)?.is_some();
+    pub fn create_edge(
+        &mut self,
+        label: &str,
+        origin: u64,
+        target: u64,
+        properties: Option<HashMap<String, Property>>,
+    ) -> Result<Edge, Error> {
+        let origin_exists = self.load_node(origin)?.is_some();
+        let target_exists = self.load_node(target)?.is_some();
         if !origin_exists || !target_exists {
             Err(Error::Todo)
         } else {
-            self.unchecked_create_edge(label, origin, target)
+            self.unchecked_create_edge(label, origin, target, properties)
         }
+    }
+
+    pub fn update_edge(&mut self, edge: &Edge) -> Result<(), Error> {
+        let edge_bytes = bincode::serialize(&edge)?;
+        btree::del(&mut self.txn, &mut self.edges, &edge.id, None)?;
+        btree::put(
+            &mut self.txn,
+            &mut self.edges,
+            &edge.id,
+            &edge_bytes.as_ref(),
+        )?;
+        Ok(())
     }
 
     pub fn commit(mut self) -> Result<(), Error> {
@@ -229,15 +248,15 @@ mod tests {
     fn create_nodes_and_edges() {
         let store = Store::open("test.gqlite").unwrap();
         let mut txn = store.mut_txn().unwrap();
-        let node1 = txn.create_node("PERSON").unwrap().id;
-        let node2 = txn.create_node("PERSON").unwrap().id;
-        let edge = txn.create_edge("KNOWS", node1, node2).unwrap().id;
+        let node1 = txn.create_node("PERSON", None).unwrap().id;
+        let node2 = txn.create_node("PERSON", None).unwrap().id;
+        let edge = txn.create_edge("KNOWS", node1, node2, None).unwrap().id;
         txn.commit().unwrap();
 
         let txn = store.txn().unwrap();
-        let node1 = txn.get_node(node1).unwrap().unwrap();
-        let node2 = txn.get_node(node2).unwrap().unwrap();
-        let edge = txn.get_edge(edge).unwrap().unwrap();
+        let node1 = txn.load_node(node1).unwrap().unwrap();
+        let node2 = txn.load_node(node2).unwrap().unwrap();
+        let edge = txn.load_edge(edge).unwrap().unwrap();
 
         assert_eq!(node1.label(), "PERSON");
         assert_eq!(node2.label(), "PERSON");

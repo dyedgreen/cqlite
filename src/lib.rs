@@ -77,11 +77,11 @@ impl Graph {
     pub fn delete_me_build_test_graph(&self) -> Result<(), Error> {
         let mut txn = self.store.mut_txn()?;
 
-        let a = txn.create_node("PERSON")?.id;
-        let b = txn.create_node("PERSON")?.id;
+        let a = txn.create_node("PERSON", None)?.id;
+        let b = txn.create_node("PERSON", None)?.id;
 
-        txn.create_edge("KNOWS", a, b)?;
-        txn.create_edge("HEARD_OF", b, a)?;
+        txn.create_edge("KNOWS", a, b, None)?;
+        txn.create_edge("HEARD_OF", b, a, None)?;
         txn.commit()?;
 
         Ok(())
@@ -154,10 +154,10 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, b).unwrap();
-        txn.create_edge("KNOWS", b, a).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, b, None).unwrap();
+        txn.create_edge("KNOWS", b, a, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph
@@ -185,9 +185,9 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, b).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, b, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]- (b) RETURN a, b, e").unwrap();
@@ -213,10 +213,10 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, a).unwrap();
-        txn.create_edge("KNOWS", b, b).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, a, None).unwrap();
+        txn.create_edge("KNOWS", b, b, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
@@ -240,10 +240,10 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, a).unwrap();
-        txn.create_edge("KNOWS", b, b).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, a, None).unwrap();
+        txn.create_edge("KNOWS", b, b, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
@@ -276,10 +276,10 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, b).unwrap();
-        txn.create_edge("HEARD_OF", b, a).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, b, None).unwrap();
+        txn.create_edge("HEARD_OF", b, a, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph
@@ -302,11 +302,11 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let mut a = txn.create_node("PERSON").unwrap();
+        let mut a = txn.create_node("PERSON", None).unwrap();
         a.properties.insert("test".into(), Property::Integer(42));
         txn.update_node(&a).unwrap();
-        let b = txn.create_node("PERSON").unwrap();
-        txn.create_edge("KNOWS", a.id(), b.id()).unwrap();
+        let b = txn.create_node("PERSON", None).unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id(), None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph
@@ -334,9 +334,9 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON").unwrap();
-        let b = txn.create_node("PERSON").unwrap();
-        txn.create_edge("KNOWS", a.id(), b.id()).unwrap();
+        let a = txn.create_node("PERSON", None).unwrap();
+        let b = txn.create_node("PERSON", None).unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id(), None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph

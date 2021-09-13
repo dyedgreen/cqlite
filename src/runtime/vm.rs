@@ -15,7 +15,7 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     edge_iters: Vec<EdgeIter<'txn>>,
 }
 
-/// TODO: Consider to do a cranelift JIT
+/// TODO: Consider to do a Cranelift JIT
 /// instead? (let's see how slow this ends
 /// up being ...)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,7 +157,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let iter = self.edge_iters.last_mut().unwrap();
                     if let Some(edge_id) = iter.next() {
                         self.edge_stack
-                            .push(self.txn.get_edge(edge_id?)?.ok_or(Error::Todo)?);
+                            .push(self.txn.load_edge(edge_id?)?.ok_or(Error::Todo)?);
                         self.current_inst += 1;
                     } else {
                         self.edge_iters.pop();
@@ -167,13 +167,13 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::LoadOriginNode(edge) => {
                     let edge = &self.edge_stack[*edge];
-                    let node = self.txn.get_node(edge.origin)?.ok_or(Error::Todo)?;
+                    let node = self.txn.load_node(edge.origin)?.ok_or(Error::Todo)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
                 Instruction::LoadTargetNode(edge) => {
                     let edge = &self.edge_stack[*edge];
-                    let node = self.txn.get_node(edge.target)?.ok_or(Error::Todo)?;
+                    let node = self.txn.load_node(edge.target)?.ok_or(Error::Todo)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
@@ -181,9 +181,9 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let node = &self.node_stack[*node];
                     let edge = &self.edge_stack[*edge];
                     let other = if edge.target == node.id {
-                        self.txn.get_node(edge.origin)?.ok_or(Error::Todo)?
+                        self.txn.load_node(edge.origin)?.ok_or(Error::Todo)?
                     } else {
-                        self.txn.get_node(edge.target)?.ok_or(Error::Todo)?
+                        self.txn.load_node(edge.target)?.ok_or(Error::Todo)?
                     };
                     self.node_stack.push(other);
                     self.current_inst += 1;

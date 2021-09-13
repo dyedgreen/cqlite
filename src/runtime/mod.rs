@@ -14,10 +14,10 @@ mod tests {
     fn test_basic_match_script() {
         let store = Store::open_anon().unwrap();
         let mut txn = store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A").unwrap().id;
-        let b = txn.create_node("PERSON_B").unwrap().id;
-        txn.create_edge("KNOWS", a, b).unwrap();
-        txn.create_edge("KNOWS", b, a).unwrap();
+        let a = txn.create_node("PERSON_A", None).unwrap().id;
+        let b = txn.create_node("PERSON_B", None).unwrap().id;
+        txn.create_edge("KNOWS", a, b, None).unwrap();
+        txn.create_edge("KNOWS", b, a, None).unwrap();
         txn.commit().unwrap();
 
         let code = {
