@@ -151,7 +151,7 @@ impl Property {
         use Property::*;
         match self {
             &Id(val) => Ok(val),
-            &Integer(val) => Ok(val.try_into()?),
+            &Integer(val) => Ok(val.try_into().map_err(|_| Error::Todo)?),
             _ => Err(Error::Todo),
         }
     }

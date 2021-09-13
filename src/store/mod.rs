@@ -1,13 +1,15 @@
 use crate::Error;
-use sanakirja::btree::UDb;
-use sanakirja::{btree, Commit, Env, MutTxn, RootDb, Storable, Txn, UnsizedStorable};
+use sanakirja::btree::{Db, UDb};
+use sanakirja::{btree, Env, MutTxn, RootDb, Storable, UnsizedStorable};
 use std::collections::HashMap;
 use std::path::Path;
+use txn::DynTxn;
 
 mod iter;
+mod txn;
 mod types;
 
-pub(crate) use iter::{EdgeIter, EntityIter};
+pub(crate) use iter::{DeserializeIter as EntityIter, EdgeIter};
 pub use types::{Edge, Node, Property};
 
 // alloc the pages to write to
@@ -17,27 +19,25 @@ pub use types::{Edge, Node, Property};
 const ID_SQUENCE: usize = 0;
 const DB_NODES: usize = 1;
 const DB_EDGES: usize = 2;
+const DB_ORIGINS: usize = 3;
+const DB_TARGETS: usize = 4;
 
 pub(crate) struct Store {
     pub env: Env,
 }
 
 pub(crate) struct StoreTxn<'a> {
-    pub txn: Txn<&'a Env>,
+    pub txn: DynTxn<&'a Env>,
 
     pub nodes: UDb<u64, [u8]>,
     pub edges: UDb<u64, [u8]>,
-}
 
-pub(crate) struct MutStoreTxn<'a> {
-    pub txn: MutTxn<&'a Env, ()>,
-
-    pub nodes: UDb<u64, [u8]>,
-    pub edges: UDb<u64, [u8]>,
+    pub origins: Db<u64, u64>,
+    pub targets: Db<u64, u64>,
 }
 
 impl Store {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, sanakirja::Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         // TODO: How small can the thing be initially,
         // how many version do we want to allow?
         let env = Env::new(path, 4096 * 4, 2)?;
@@ -46,7 +46,7 @@ impl Store {
         Ok(store)
     }
 
-    pub fn open_anon() -> Result<Self, sanakirja::Error> {
+    pub fn open_anon() -> Result<Self, Error> {
         // TODO: is the size good?
         let env = Env::new_anon(4096 * 4, 2)?;
         let store = Self { env };
@@ -54,24 +54,37 @@ impl Store {
         Ok(store)
     }
 
-    pub fn mut_txn(&self) -> Result<MutStoreTxn, sanakirja::Error> {
+    pub fn mut_txn(&self) -> Result<StoreTxn, Error> {
         let mut txn = Env::mut_txn_begin(&self.env)?;
         let nodes = Self::get_buffer_db(&mut txn, DB_NODES)?;
         let edges = Self::get_buffer_db(&mut txn, DB_EDGES)?;
-        Ok(MutStoreTxn { txn, nodes, edges })
+        let origins = Self::get_db(&mut txn, DB_ORIGINS)?;
+        let targets = Self::get_db(&mut txn, DB_TARGETS)?;
+        Ok(StoreTxn {
+            txn: DynTxn::MutTxn(txn),
+            nodes,
+            edges,
+            origins,
+            targets,
+        })
     }
 
     pub fn txn(&self) -> Result<StoreTxn, Error> {
         let txn = Env::txn_begin(&self.env)?;
         let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
         let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
-        Ok(StoreTxn { txn, nodes, edges })
+        let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Todo)?;
+        let targets = txn.root_db(DB_TARGETS).ok_or(Error::Todo)?;
+        Ok(StoreTxn {
+            txn: DynTxn::Txn(txn),
+            nodes,
+            edges,
+            origins,
+            targets,
+        })
     }
 
-    fn get_db<K, V>(
-        txn: &mut MutTxn<&Env, ()>,
-        n: usize,
-    ) -> Result<btree::Db<K, V>, sanakirja::Error>
+    fn get_db<K, V>(txn: &mut MutTxn<&Env, ()>, n: usize) -> Result<btree::Db<K, V>, Error>
     where
         K: Storable,
         V: Storable,
@@ -84,10 +97,7 @@ impl Store {
         }
     }
 
-    fn get_buffer_db<K>(
-        txn: &mut MutTxn<&Env, ()>,
-        n: usize,
-    ) -> Result<btree::UDb<K, [u8]>, sanakirja::Error>
+    fn get_buffer_db<K>(txn: &mut MutTxn<&Env, ()>, n: usize) -> Result<btree::UDb<K, [u8]>, Error>
     where
         K: UnsizedStorable,
     {
@@ -130,16 +140,16 @@ impl<'e> StoreTxn<'e> {
     }
 }
 
-impl<'e> MutStoreTxn<'e> {
-    pub fn id_seq(&mut self) -> u64 {
+impl<'e> StoreTxn<'e> {
+    pub fn id_seq(&mut self) -> Result<u64, Error> {
         let id = self.txn.root(ID_SQUENCE).unwrap_or(0);
-        self.txn.set_root(ID_SQUENCE, id + 1);
-        id
+        self.txn.set_root(ID_SQUENCE, id + 1)?;
+        Ok(id)
     }
 
     pub fn create_node(&mut self, label: &str) -> Result<Node, Error> {
         let node = Node {
-            id: self.id_seq(),
+            id: self.id_seq()?,
             label: label.to_string(),
             properties: HashMap::new(),
             origins: Vec::new(),
@@ -168,23 +178,9 @@ impl<'e> MutStoreTxn<'e> {
         Ok(())
     }
 
-    pub fn get_node(&self, id: u64) -> Result<Option<Node>, Error> {
-        let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
-        if let Some((&entry_id, bytes)) = entry {
-            if entry_id == id {
-                let node = bincode::deserialize(bytes.as_ref())?;
-                Ok(Some(node))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn create_edge(&mut self, label: &str, origin: u64, target: u64) -> Result<Edge, Error> {
         let edge = Edge {
-            id: self.id_seq(),
+            id: self.id_seq()?,
             label: label.to_string(),
             properties: HashMap::new(),
             origin,
@@ -210,9 +206,11 @@ impl<'e> MutStoreTxn<'e> {
         Ok(bincode::deserialize(entry.1).map_err(|_| Error::Todo)?)
     }
 
-    pub fn commit(mut self) -> Result<(), sanakirja::Error> {
-        self.txn.set_root(DB_NODES, self.nodes.db);
-        self.txn.set_root(DB_EDGES, self.edges.db);
+    pub fn commit(mut self) -> Result<(), Error> {
+        self.txn.set_root(DB_NODES, self.nodes.db)?;
+        self.txn.set_root(DB_EDGES, self.edges.db)?;
+        self.txn.set_root(DB_ORIGINS, self.origins.db)?;
+        self.txn.set_root(DB_TARGETS, self.targets.db)?;
         self.txn.commit()
     }
 }

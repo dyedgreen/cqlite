@@ -2,9 +2,6 @@ use crate::store::{Edge, EdgeIter, EntityIter, Node, StoreTxn};
 use crate::{Error, Property};
 use std::cmp::Ordering;
 
-// FIXME: Should not depend on impl. details of store ...
-use sanakirja::{Env, Txn};
-
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
 
@@ -14,7 +11,7 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
 
     pub(crate) node_stack: Vec<Node>,
     pub(crate) edge_stack: Vec<Edge>,
-    node_iters: Vec<EntityIter<'txn, Txn<&'env Env>, Node>>,
+    node_iters: Vec<EntityIter<'txn, Node>>,
     edge_iters: Vec<EdgeIter>,
 }
 

@@ -1,27 +1,24 @@
 use crate::Error;
-use sanakirja::{btree, LoadPage};
+use sanakirja::{btree, Env};
 use serde::Deserialize;
 use std::marker::PhantomData;
 
-use super::types::Node;
+use super::{types::Node, DynTxn};
 
-pub(crate) struct EntityIter<'t, T, I>
+pub(crate) struct DeserializeIter<'t, I>
 where
-    T: LoadPage,
     I: Deserialize<'t>,
 {
-    inner: btree::Iter<'t, T, u64, [u8], btree::page_unsized::Page<u64, [u8]>>,
+    inner: btree::Iter<'t, DynTxn<&'t Env>, u64, [u8], btree::page_unsized::Page<u64, [u8]>>,
     _item: PhantomData<&'t I>,
 }
 
-impl<'t, T, I> EntityIter<'t, T, I>
+impl<'t, I> DeserializeIter<'t, I>
 where
-    T: LoadPage,
-    T::Error: std::error::Error,
     I: Deserialize<'t>,
 {
     pub(crate) fn new(
-        txn: &'t T,
+        txn: &'t DynTxn<&'t Env>,
         db: &btree::UDb<u64, [u8]>,
         origin: Option<u64>,
     ) -> Result<Self, Error> {
@@ -33,9 +30,8 @@ where
     }
 }
 
-impl<'t, T, I> Iterator for EntityIter<'t, T, I>
+impl<'t, I> Iterator for DeserializeIter<'t, I>
 where
-    T: LoadPage,
     I: Deserialize<'t>,
 {
     type Item = Result<I, Error>;

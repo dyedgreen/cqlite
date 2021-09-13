@@ -70,6 +70,10 @@ impl Graph {
         Ok(Txn(self.store.txn()?))
     }
 
+    pub fn mut_txn(&self) -> Result<Txn, Error> {
+        Ok(Txn(self.store.mut_txn()?))
+    }
+
     pub fn delete_me_build_test_graph(&self) -> Result<(), Error> {
         let mut txn = self.store.mut_txn()?;
 
