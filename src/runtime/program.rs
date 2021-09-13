@@ -3,7 +3,7 @@ use crate::runtime::{Access, Instruction};
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Program {
     pub instructions: Vec<Instruction>,
-    pub accesses: Vec<Access>, // TODO: more clear naming (?)
+    pub accesses: Vec<Access>,
     pub returns: Vec<Access>,
 }
 

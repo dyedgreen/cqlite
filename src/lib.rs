@@ -302,9 +302,9 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let mut a = txn.create_node("PERSON", None).unwrap();
-        a.properties.insert("test".into(), Property::Integer(42));
-        txn.update_node(&a).unwrap();
+        let a = txn.create_node("PERSON", None).unwrap();
+        txn.update_node(a.id(), "test", Property::Integer(42))
+            .unwrap();
         let b = txn.create_node("PERSON", None).unwrap();
         txn.create_edge("KNOWS", a.id(), b.id(), None).unwrap();
         txn.commit().unwrap();

@@ -155,25 +155,22 @@ impl<'e> StoreTxn<'e> {
             label: label.to_string(),
             properties: properties.unwrap_or(HashMap::new()),
         };
-        let node_bytes = bincode::serialize(&node)?;
-        btree::put(
-            &mut self.txn,
-            &mut self.nodes,
-            &node.id,
-            node_bytes.as_ref(),
-        )?;
+        let bytes = bincode::serialize(&node)?;
+        btree::put(&mut self.txn, &mut self.nodes, &node.id, bytes.as_ref())?;
         Ok(node)
     }
 
-    pub fn update_node(&mut self, node: &Node) -> Result<(), Error> {
-        let node_bytes = bincode::serialize(&node)?;
+    pub fn update_node(&mut self, node: u64, key: &str, value: Property) -> Result<(), Error> {
+        let mut node = self.load_node(node)?.ok_or(Error::Todo)?;
+        node.properties.insert(key.to_string(), value);
+        let bytes = bincode::serialize(&node)?;
         btree::del(&mut self.txn, &mut self.nodes, &node.id, None)?;
-        btree::put(
-            &mut self.txn,
-            &mut self.nodes,
-            &node.id,
-            node_bytes.as_ref(),
-        )?;
+        btree::put(&mut self.txn, &mut self.nodes, &node.id, bytes.as_ref())?;
+        Ok(())
+    }
+
+    pub fn delete_node(&mut self, node: u64) -> Result<(), Error> {
+        btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
         Ok(())
     }
 
@@ -191,13 +188,8 @@ impl<'e> StoreTxn<'e> {
             origin,
             target,
         };
-        let edge_bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
-        btree::put(
-            &mut self.txn,
-            &mut self.edges,
-            &edge.id,
-            edge_bytes.as_ref(),
-        )?;
+        let bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
+        btree::put(&mut self.txn, &mut self.edges, &edge.id, bytes.as_ref())?;
         btree::put(&mut self.txn, &mut self.origins, &edge.origin, &edge.id)?;
         btree::put(&mut self.txn, &mut self.targets, &edge.target, &edge.id)?;
         Ok(edge)
@@ -219,15 +211,16 @@ impl<'e> StoreTxn<'e> {
         }
     }
 
-    pub fn update_edge(&mut self, edge: &Edge) -> Result<(), Error> {
-        let edge_bytes = bincode::serialize(&edge)?;
+    pub fn update_edge(&mut self, edge: u64, key: &str, value: Property) -> Result<(), Error> {
+        let mut edge = self.load_edge(edge)?.ok_or(Error::Todo)?;
+        edge.properties.insert(key.to_string(), value);
+        let bytes = bincode::serialize(&edge)?;
         btree::del(&mut self.txn, &mut self.edges, &edge.id, None)?;
-        btree::put(
-            &mut self.txn,
-            &mut self.edges,
-            &edge.id,
-            &edge_bytes.as_ref(),
-        )?;
+        btree::put(&mut self.txn, &mut self.edges, &edge.id, bytes.as_ref())?;
+        Ok(())
+    }
+    pub fn delete_edge(&mut self, edge: u64) -> Result<(), Error> {
+        btree::del(&mut self.txn, &mut self.edges, &edge, None)?;
         Ok(())
     }
 
@@ -261,5 +254,53 @@ mod tests {
         assert_eq!(node1.label(), "PERSON");
         assert_eq!(node2.label(), "PERSON");
         assert_eq!(edge.label(), "KNOWS");
+    }
+
+    #[test]
+    fn update_nodes_and_edges() {
+        let store = Store::open_anon().unwrap();
+        let mut txn = store.mut_txn().unwrap();
+        let node = txn.create_node("PERSON", None).unwrap();
+        let edge = txn
+            .create_edge("KNOWS", node.id(), node.id(), None)
+            .unwrap();
+        txn.commit().unwrap();
+
+        let mut txn = store.mut_txn().unwrap();
+        txn.update_node(node.id(), "test", Property::Integer(42))
+            .unwrap();
+        txn.update_edge(edge.id(), "test", Property::Real(42.0))
+            .unwrap();
+        txn.commit().unwrap();
+
+        let txn = store.txn().unwrap();
+        let node = txn.load_node(node.id()).unwrap().unwrap();
+        let edge = txn.load_edge(edge.id()).unwrap().unwrap();
+
+        assert_eq!(node.property("test"), &Property::Integer(42));
+        assert_eq!(edge.property("test"), &Property::Real(42.0));
+    }
+
+    #[test]
+    fn delete_nodes_and_edges() {
+        let store = Store::open_anon().unwrap();
+        let mut txn = store.mut_txn().unwrap();
+        let node = txn.create_node("PERSON", None).unwrap();
+        let edge = txn
+            .create_edge("KNOWS", node.id(), node.id(), None)
+            .unwrap();
+        txn.commit().unwrap();
+
+        let mut txn = store.mut_txn().unwrap();
+        assert!(txn.load_node(node.id()).unwrap().is_some());
+        assert!(txn.load_edge(edge.id()).unwrap().is_some());
+
+        txn.delete_node(node.id()).unwrap();
+        txn.delete_edge(edge.id()).unwrap();
+        txn.commit().unwrap();
+
+        let txn = store.txn().unwrap();
+        assert!(txn.load_node(node.id()).unwrap().is_none());
+        assert!(txn.load_edge(edge.id()).unwrap().is_none());
     }
 }
