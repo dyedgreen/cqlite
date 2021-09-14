@@ -8,14 +8,15 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
 
     instructions: &'prog [Instruction],
     accesses: &'prog [Access],
-    current_inst: usize,
-
     parameters: HashMap<String, Property>,
+    current_inst: usize,
 
     pub(crate) node_stack: Vec<Node>,
     pub(crate) edge_stack: Vec<Edge>,
     node_iters: Vec<NodeIter<'txn>>,
     edge_iters: Vec<EdgeIter<'txn>>,
+
+    updates: Vec<Update<'prog>>,
 }
 
 /// TODO: Consider to do a Cranelift JIT
@@ -58,6 +59,9 @@ pub(crate) enum Instruction {
     CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs = rhs
     CheckLt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs < rhs
     CheckGt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs > rhs
+
+    SetNodeProperty(usize, usize, String), // given (node, value, key), set node.key = access(value)
+    SetEdgeProperty(usize, usize, String), // given (node, value, key), set edge.key = access(value)
 }
 
 /// TODO: An instruction to access a value
@@ -70,6 +74,12 @@ pub(crate) enum Access {
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
     Parameter(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Update<'prog> {
+    SetNodeProperty(u64, &'prog str, Property),
+    SetEdgeProperty(u64, &'prog str, Property),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +107,8 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             edge_stack: Vec::new(),
             node_iters: Vec::new(),
             edge_iters: Vec::new(),
+
+            updates: Vec::new(),
         }
     }
 
@@ -296,8 +308,41 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
+
+                Instruction::SetNodeProperty(node, value, key) => {
+                    let node = &self.node_stack[*node];
+                    let value = self.access_property(*value)?.clone();
+                    self.updates
+                        .push(Update::SetNodeProperty(node.id, key, value));
+                    self.current_inst += 1;
+                }
+                Instruction::SetEdgeProperty(edge, value, key) => {
+                    let edge = &self.node_stack[*edge];
+                    let value = self.access_property(*value)?.clone();
+                    self.updates
+                        .push(Update::SetEdgeProperty(edge.id, key, value));
+                    self.current_inst += 1;
+                }
             }
         }
+    }
+
+    pub fn finalize(self) -> Result<Vec<Update<'prog>>, Error> {
+        match self.instructions[self.current_inst] {
+            Instruction::Halt => Ok(self.updates),
+            _ => Err(Error::Todo),
+        }
+    }
+
+    /// FIXME: should be on store txn ...
+    pub fn flush(txn: &mut StoreTxn, updates: Vec<Update>) -> Result<(), Error> {
+        for update in updates {
+            match update {
+                Update::SetNodeProperty(node, key, value) => txn.update_node(node, key, value)?,
+                Update::SetEdgeProperty(edge, key, value) => txn.update_edge(edge, key, value)?,
+            }
+        }
+        Ok(())
     }
 }
 

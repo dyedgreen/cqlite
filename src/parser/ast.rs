@@ -2,6 +2,7 @@
 pub struct Query<'src> {
     pub match_clauses: Vec<MatchClause<'src>>,
     pub where_clauses: Vec<Condition<'src>>,
+    pub set_clauses: Vec<SetClause<'src>>,
     pub return_clause: Vec<&'src str>,
 }
 
@@ -9,6 +10,13 @@ pub struct Query<'src> {
 pub struct MatchClause<'src> {
     pub start: Node<'src>,
     pub edges: Vec<(Edge<'src>, Node<'src>)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SetClause<'src> {
+    pub name: &'src str,
+    pub key: &'src str,
+    pub value: Expression<'src>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

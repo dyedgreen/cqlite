@@ -88,6 +88,12 @@ impl Graph {
     }
 }
 
+impl<'graph> Txn<'graph> {
+    pub fn commit(self) -> Result<(), Error> {
+        self.0.commit()
+    }
+}
+
 impl<'graph> Statement<'graph> {
     /// TODO: Do we expose the parameters as a
     /// hash map, or should there be a `bind(key, value)`
@@ -108,9 +114,15 @@ impl<'graph> Statement<'graph> {
         })
     }
 
-    pub fn execute(&self, parameters: Option<HashMap<String, Property>>) -> Result<(), Error> {
-        let txn = self.graph.txn()?;
-        self.query(&txn, parameters)?;
+    pub fn execute(
+        &self,
+        txn: &mut Txn,
+        parameters: Option<HashMap<String, Property>>,
+    ) -> Result<(), Error> {
+        let mut query = self.query(&txn, parameters)?;
+        while let Some(_) = query.step()? {}
+        let updates = query.vm.finalize()?;
+        VirtualMachine::flush(&mut txn.0, updates)?;
         Ok(())
     }
 }
@@ -118,6 +130,7 @@ impl<'graph> Statement<'graph> {
 impl<'stmt, 'txn> Query<'stmt, 'txn> {
     #[inline]
     pub fn step(&mut self) -> Result<Option<Match>, Error> {
+        // TODO: If a query has no return clause, skip yields ...
         match self.vm.run()? {
             Status::Yield => Ok(Some(Match { query: self })),
             Status::Halt => Ok(None),
@@ -228,7 +241,9 @@ mod tests {
 
         let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
         let txn = graph.txn().unwrap();
+        let txn2 = graph.txn().unwrap();
         let mut matches = stmt.query(&txn, None).unwrap();
+        let mut matches2 = stmt.query(&txn2, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -237,7 +252,6 @@ mod tests {
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_B", result.node(0).unwrap().label());
         assert_eq!("KNOWS", result.edge(1).unwrap().label());
-
         assert!(matches.step().unwrap().is_none());
     }
 
@@ -411,5 +425,31 @@ mod tests {
         let result = matches.step().unwrap().unwrap();
         assert_eq!(a.id(), result.node(0).unwrap().id());
         assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_set() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        txn.create_node("PERSON", None).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph.prepare("MATCH (a:PERSON) SET a.answer = 42").unwrap();
+        let mut txn = graph.mut_txn().unwrap();
+        stmt.execute(&mut txn, None).unwrap();
+        txn.commit().unwrap();
+
+        let txn = graph.txn().unwrap();
+        let stmt = graph
+            .prepare("MATCH (a:PERSON) WHERE ID(a) = 0 RETURN a")
+            .unwrap();
+        let mut query = stmt.query(&txn, None).unwrap();
+        let results = query.step().unwrap().unwrap();
+        assert_eq!(
+            &Property::Integer(42),
+            results.node(0).unwrap().property("answer")
+        );
     }
 }

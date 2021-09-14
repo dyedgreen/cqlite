@@ -3,6 +3,7 @@ use crate::store::Property; // TODO: Should it directly use this?
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct QueryPlan {
     pub steps: Vec<MatchStep>,
+    pub updates: Vec<UpdateStep>,
     pub returns: Vec<NamedEntity>,
 }
 
@@ -77,4 +78,18 @@ pub(crate) enum LoadProperty {
     PropertyOfNode { node: usize, key: String },
     PropertyOfEdge { edge: usize, key: String },
     Parameter { name: String },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum UpdateStep {
+    SetNodeProperty {
+        node: usize,
+        key: String,
+        value: LoadProperty,
+    },
+    SetEdgeProperty {
+        edge: usize,
+        key: String,
+        value: LoadProperty,
+    },
 }

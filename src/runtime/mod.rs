@@ -2,7 +2,7 @@ mod program;
 mod vm;
 
 pub(crate) use program::Program;
-pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
+pub(crate) use vm::{Access, Instruction, Status, Update, VirtualMachine};
 
 #[cfg(test)]
 mod tests {
@@ -40,8 +40,8 @@ mod tests {
             ]
         };
 
-        let txn = store.txn().unwrap();
-        let mut vm = VirtualMachine::new(&txn, &code, &[], HashMap::new());
+        let mut txn = store.txn().unwrap();
+        let mut vm = VirtualMachine::new(&mut txn, &code, &[], HashMap::new());
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());

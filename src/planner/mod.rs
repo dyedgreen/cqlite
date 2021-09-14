@@ -2,7 +2,7 @@ mod build;
 mod compile;
 mod plan;
 
-pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
+pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
 
 #[cfg(test)]
 mod tests {
@@ -23,6 +23,7 @@ mod tests {
                 )],
             }],
             where_clauses: vec![],
+            set_clauses: vec![],
             return_clause: vec!["a", "b"],
         };
 
@@ -32,6 +33,7 @@ mod tests {
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
+            updates: vec![],
             returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
         };
 
@@ -46,6 +48,7 @@ mod tests {
                 MatchStep::LoadOriginEdge { name: 1, node: 0 },
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
+            updates: vec![],
             returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
         };
 

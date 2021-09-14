@@ -2,7 +2,7 @@ use crate::Error;
 use crate::{parser::ast, Property};
 use std::collections::HashMap;
 
-use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
+use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
 
 pub(crate) struct BuildEnv<'a> {
     names: HashMap<&'a str, NamedEntity>,
@@ -135,91 +135,58 @@ impl<'a> BuildEnv<'a> {
         };
         Ok(filter)
     }
-}
 
-impl QueryPlan {
-    pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
-        if query.match_clauses.is_empty() && !query.where_clauses.is_empty() {
-            return Err(Error::Todo);
-        }
-        if query.match_clauses.is_empty() && !query.return_clause.is_empty() {
-            return Err(Error::Todo);
-        }
-
-        let mut env = BuildEnv::new();
+    fn build_match(&mut self, clause: &ast::MatchClause<'a>) -> Result<Vec<MatchStep>, Error> {
         let mut steps = vec![];
 
         // FIXME: this is an eyesore ...
-        for clause in &query.match_clauses {
-            let mut prev_node_name = if let Some(name) = clause.start.annotation.name {
-                if let Some(name) = env.get_node(name)? {
-                    name
-                } else {
-                    let name = env.create_node(name)?;
-                    steps.push(MatchStep::LoadAnyNode { name });
-                    name
-                }
+        let mut prev_node_name = if let Some(name) = clause.start.annotation.name {
+            if let Some(name) = self.get_node(name)? {
+                name
             } else {
-                let name = env.next_name();
+                let name = self.create_node(name)?;
                 steps.push(MatchStep::LoadAnyNode { name });
                 name
-            };
-
-            if let Some(label) = clause.start.annotation.label {
-                steps.push(MatchStep::Filter(Filter::NodeHasLabel {
-                    node: prev_node_name,
-                    label: label.to_string(),
-                }));
             }
+        } else {
+            let name = self.next_name();
+            steps.push(MatchStep::LoadAnyNode { name });
+            name
+        };
 
-            for (edge, node) in &clause.edges {
-                let edge_name = if let Some(name) = edge.annotation.name {
-                    if let Some(name) = env.get_edge(name)? {
-                        match edge.direction {
-                            ast::Direction::Left => {
-                                steps.push(MatchStep::Filter(Filter::IsTarget {
-                                    node: prev_node_name,
-                                    edge: name,
-                                }))
-                            }
-                            ast::Direction::Right => {
-                                steps.push(MatchStep::Filter(Filter::IsOrigin {
-                                    node: prev_node_name,
-                                    edge: name,
-                                }))
-                            }
-                            ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
-                                Filter::IsOrigin {
-                                    node: prev_node_name,
-                                    edge: name,
-                                },
-                                Filter::IsTarget {
-                                    node: prev_node_name,
-                                    edge: name,
-                                },
-                            ))),
-                        }
-                        name
-                    } else {
-                        let name = env.create_edge(name)?;
-                        match edge.direction {
-                            ast::Direction::Left => steps.push(MatchStep::LoadTargetEdge {
-                                name,
+        if let Some(label) = clause.start.annotation.label {
+            steps.push(MatchStep::Filter(Filter::NodeHasLabel {
+                node: prev_node_name,
+                label: label.to_string(),
+            }));
+        }
+
+        for (edge, node) in &clause.edges {
+            let edge_name = if let Some(name) = edge.annotation.name {
+                if let Some(name) = self.get_edge(name)? {
+                    match edge.direction {
+                        ast::Direction::Left => steps.push(MatchStep::Filter(Filter::IsTarget {
+                            node: prev_node_name,
+                            edge: name,
+                        })),
+                        ast::Direction::Right => steps.push(MatchStep::Filter(Filter::IsOrigin {
+                            node: prev_node_name,
+                            edge: name,
+                        })),
+                        ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
+                            Filter::IsOrigin {
                                 node: prev_node_name,
-                            }),
-                            ast::Direction::Right => steps.push(MatchStep::LoadOriginEdge {
-                                name,
+                                edge: name,
+                            },
+                            Filter::IsTarget {
                                 node: prev_node_name,
-                            }),
-                            ast::Direction::Either => steps.push(MatchStep::LoadEitherEdge {
-                                name,
-                                node: prev_node_name,
-                            }),
-                        }
-                        name
+                                edge: name,
+                            },
+                        ))),
                     }
+                    name
                 } else {
-                    let name = env.next_name();
+                    let name = self.create_edge(name)?;
                     match edge.direction {
                         ast::Direction::Left => steps.push(MatchStep::LoadTargetEdge {
                             name,
@@ -235,75 +202,70 @@ impl QueryPlan {
                         }),
                     }
                     name
-                };
-
-                if let Some(label) = edge.annotation.label {
-                    steps.push(MatchStep::Filter(Filter::EdgeHasLabel {
-                        edge: edge_name,
-                        label: label.to_string(),
-                    }));
                 }
+            } else {
+                let name = self.next_name();
+                match edge.direction {
+                    ast::Direction::Left => steps.push(MatchStep::LoadTargetEdge {
+                        name,
+                        node: prev_node_name,
+                    }),
+                    ast::Direction::Right => steps.push(MatchStep::LoadOriginEdge {
+                        name,
+                        node: prev_node_name,
+                    }),
+                    ast::Direction::Either => steps.push(MatchStep::LoadEitherEdge {
+                        name,
+                        node: prev_node_name,
+                    }),
+                }
+                name
+            };
 
-                prev_node_name = if let Some(name) = node.annotation.name {
-                    if let Some(name) = env.get_node(name)? {
-                        match edge.direction {
-                            ast::Direction::Left => {
-                                steps.push(MatchStep::Filter(Filter::IsOrigin {
+            if let Some(label) = edge.annotation.label {
+                steps.push(MatchStep::Filter(Filter::EdgeHasLabel {
+                    edge: edge_name,
+                    label: label.to_string(),
+                }));
+            }
+
+            prev_node_name = if let Some(name) = node.annotation.name {
+                if let Some(name) = self.get_node(name)? {
+                    match edge.direction {
+                        ast::Direction::Left => steps.push(MatchStep::Filter(Filter::IsOrigin {
+                            node: name,
+                            edge: edge_name,
+                        })),
+                        ast::Direction::Right => steps.push(MatchStep::Filter(Filter::IsTarget {
+                            node: name,
+                            edge: edge_name,
+                        })),
+                        ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
+                            Filter::and(
+                                Filter::IsOrigin {
                                     node: name,
                                     edge: edge_name,
-                                }))
-                            }
-                            ast::Direction::Right => {
-                                steps.push(MatchStep::Filter(Filter::IsTarget {
+                                },
+                                Filter::IsTarget {
+                                    node: prev_node_name,
+                                    edge: edge_name,
+                                },
+                            ),
+                            Filter::and(
+                                Filter::IsTarget {
                                     node: name,
                                     edge: edge_name,
-                                }))
-                            }
-                            ast::Direction::Either => steps.push(MatchStep::Filter(Filter::or(
-                                Filter::and(
-                                    Filter::IsOrigin {
-                                        node: name,
-                                        edge: edge_name,
-                                    },
-                                    Filter::IsTarget {
-                                        node: prev_node_name,
-                                        edge: edge_name,
-                                    },
-                                ),
-                                Filter::and(
-                                    Filter::IsTarget {
-                                        node: name,
-                                        edge: edge_name,
-                                    },
-                                    Filter::IsOrigin {
-                                        node: prev_node_name,
-                                        edge: edge_name,
-                                    },
-                                ),
-                            ))),
-                        }
-                        name
-                    } else {
-                        let name = env.create_node(name)?;
-                        match edge.direction {
-                            ast::Direction::Left => steps.push(MatchStep::LoadOriginNode {
-                                name,
-                                edge: edge_name,
-                            }),
-                            ast::Direction::Right => steps.push(MatchStep::LoadTargetNode {
-                                name,
-                                edge: edge_name,
-                            }),
-                            ast::Direction::Either => steps.push(MatchStep::LoadOtherNode {
-                                name,
-                                node: prev_node_name,
-                                edge: edge_name,
-                            }),
-                        }
-                        name
+                                },
+                                Filter::IsOrigin {
+                                    node: prev_node_name,
+                                    edge: edge_name,
+                                },
+                            ),
+                        ))),
                     }
+                    name
                 } else {
-                    let name = env.next_name();
+                    let name = self.create_node(name)?;
                     match edge.direction {
                         ast::Direction::Left => steps.push(MatchStep::LoadOriginNode {
                             name,
@@ -320,19 +282,94 @@ impl QueryPlan {
                         }),
                     }
                     name
-                };
-
-                if let Some(label) = node.annotation.label {
-                    steps.push(MatchStep::Filter(Filter::NodeHasLabel {
-                        node: prev_node_name,
-                        label: label.to_string(),
-                    }));
                 }
+            } else {
+                let name = self.next_name();
+                match edge.direction {
+                    ast::Direction::Left => steps.push(MatchStep::LoadOriginNode {
+                        name,
+                        edge: edge_name,
+                    }),
+                    ast::Direction::Right => steps.push(MatchStep::LoadTargetNode {
+                        name,
+                        edge: edge_name,
+                    }),
+                    ast::Direction::Either => steps.push(MatchStep::LoadOtherNode {
+                        name,
+                        node: prev_node_name,
+                        edge: edge_name,
+                    }),
+                }
+                name
+            };
+
+            if let Some(label) = node.annotation.label {
+                steps.push(MatchStep::Filter(Filter::NodeHasLabel {
+                    node: prev_node_name,
+                    label: label.to_string(),
+                }));
             }
+        }
+
+        Ok(steps)
+    }
+
+    fn build_set_update(&mut self, clause: &ast::SetClause<'a>) -> Result<UpdateStep, Error> {
+        match self.names.get(clause.name) {
+            Some(NamedEntity::Node(node)) => Ok(UpdateStep::SetNodeProperty {
+                node: *node,
+                key: clause.key.to_string(),
+                value: self.build_load_property(&clause.value)?,
+            }),
+            Some(NamedEntity::Edge(edge)) => Ok(UpdateStep::SetEdgeProperty {
+                edge: *edge,
+                key: clause.key.to_string(),
+                value: self.build_load_property(&clause.value)?,
+            }),
+            None => Err(Error::Todo),
+        }
+    }
+}
+
+impl QueryPlan {
+    fn validate_query(query: &ast::Query) -> Result<(), Error> {
+        if query.match_clauses.is_empty() && !query.where_clauses.is_empty() {
+            // need matches to apply where (TODO: just let this bomb if names
+            // are missing?)
+            return Err(Error::Todo);
+        }
+
+        if query.match_clauses.is_empty() && !query.return_clause.is_empty() {
+            // a return clause needs a match to return from (also just let this
+            // bomb if names are missing?)
+            return Err(Error::Todo);
+        }
+
+        if !query.set_clauses.is_empty() && !query.return_clause.is_empty() {
+            // We don't support returning updated data (yet ..?)
+            return Err(Error::Todo);
+        }
+
+        Ok(())
+    }
+
+    pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
+        Self::validate_query(query)?;
+
+        let mut env = BuildEnv::new();
+        let mut steps = vec![];
+        let mut updates = vec![];
+
+        for clause in &query.match_clauses {
+            steps.append(&mut env.build_match(clause)?);
         }
 
         for condition in &query.where_clauses {
             steps.push(MatchStep::Filter(env.build_filter(condition)?));
+        }
+
+        for clause in &query.set_clauses {
+            updates.push(env.build_set_update(clause)?);
         }
 
         let mut returns = Vec::with_capacity(query.return_clause.len());
@@ -340,6 +377,10 @@ impl QueryPlan {
             returns.push(*env.names.get(name).ok_or(Error::Todo)?);
         }
 
-        Ok(QueryPlan { steps, returns })
+        Ok(QueryPlan {
+            steps,
+            updates,
+            returns,
+        })
     }
 }

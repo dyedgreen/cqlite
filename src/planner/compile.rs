@@ -1,4 +1,4 @@
-use crate::planner::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan};
+use crate::planner::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
 use crate::runtime::{Access, Instruction, Program};
 use crate::Error;
 use std::collections::HashMap;
@@ -84,7 +84,9 @@ impl CompileEnv {
                 | LoadTargetNode(_)
                 | LoadOtherNode(_, _)
                 | PopNode
-                | PopEdge => (),
+                | PopEdge
+                | SetNodeProperty(_, _, _)
+                | SetEdgeProperty(_, _, _) => (),
             }
         }
     }
@@ -305,6 +307,28 @@ impl CompileEnv {
             Ok(())
         } else {
             self.instructions.push(Instruction::Yield);
+            for update in &plan.updates {
+                match update {
+                    UpdateStep::SetNodeProperty { node, key, value } => {
+                        let node = self.get_stack_idx(*node)?;
+                        let value = self.compile_access(value)?;
+                        self.instructions.push(Instruction::SetNodeProperty(
+                            node,
+                            value,
+                            key.to_string(),
+                        ));
+                    }
+                    UpdateStep::SetEdgeProperty { edge, key, value } => {
+                        let edge = self.get_stack_idx(*edge)?;
+                        let value = self.compile_access(value)?;
+                        self.instructions.push(Instruction::SetEdgeProperty(
+                            edge,
+                            value,
+                            key.to_string(),
+                        ));
+                    }
+                }
+            }
             if self.returns.is_empty() {
                 for value in &plan.returns {
                     self.returns.push(match value {

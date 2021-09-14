@@ -6,16 +6,19 @@ peg::parser! {
     grammar cypher() for str {
         use ast::*;
 
-        rule kw_match()  = "MATCH"
-        rule kw_where()  = "WHERE"
-        rule kw_return() = "RETURN"
-        rule kw_true()   = "TRUE"
-        rule kw_false()  = "FALSE"
-        rule kw_null() = "NULL"
-        rule kw_and() = "AND"
-        rule kw_or() = "OR"
-        rule kw_not() = "NOT"
-        rule kw_id() = "ID"
+        rule kw_match()     = "MATCH"
+        rule kw_create()    = "CREATE"
+        rule kw_set()       = "SET"
+        rule ks_delete()    = "DELETE"
+        rule kw_where()     = "WHERE"
+        rule kw_return()    = "RETURN"
+        rule kw_true()      = "TRUE"
+        rule kw_false()     = "FALSE"
+        rule kw_null()      = "NULL"
+        rule kw_and()       = "AND"
+        rule kw_or()        = "OR"
+        rule kw_not()       = "NOT"
+        rule kw_id()        = "ID"
 
         rule _()
             = [' ']
@@ -80,10 +83,13 @@ peg::parser! {
             / "-" { Edge::either(Annotation::empty()) }
 
 
+        rule property() -> (&'input str, &'input str)
+            = name:ident() "." key:ident() { (name, key) }
+
         rule expression() -> Expression<'input>
             = "$" name:ident() { Expression::Parameter(name) }
             / l:literal() { Expression::Literal(l) }
-            / name:ident() "." key:ident() { Expression::Property { name, key } }
+            / p:property() { Expression::Property { name: p.0, key: p.1 } }
 
         rule condition() -> Condition<'input>= precedence!{
             a:(@) __* kw_and() __* b:@ { Condition::and(a, b) }
@@ -116,6 +122,12 @@ peg::parser! {
         rule where_clause() -> Condition<'input>
             = kw_where() __+ c:condition() { c }
 
+        // e.g. 'SET a.name = 'Peter Parker''
+        rule set_clause() -> SetClause<'input>
+            = kw_set() __+ p:property() _* "=" _* e:expression() {
+                SetClause { name: p.0, key: p.1, value: e }
+            }
+
         // e.g. 'RETURN a, b'
         rule return_clause() -> Vec<&'input str>
             = kw_return() __+ items:( ident() ++ (__* "," __*) ) { items }
@@ -124,8 +136,9 @@ peg::parser! {
             = __*
               match_clauses:( match_clause() ** (__+) )
               where_clauses:( __* w:( where_clause() ** (__+) )? { w.unwrap_or_else(Vec::new) } )
+              set_clauses:( __* s:(set_clause() ** (__+) )? { s.unwrap_or_else(Vec::new) } )
               return_clause:( __* r:return_clause()? { r.unwrap_or_else(Vec::new) })
-              __* { Query { match_clauses, where_clauses, return_clause } }
+              __* { Query { match_clauses, where_clauses, set_clauses, return_clause } }
     }
 }
 
@@ -151,6 +164,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -165,6 +179,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -179,6 +194,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -194,6 +210,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -208,6 +225,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["e", "b"],
             })
         );
@@ -222,6 +240,7 @@ mod tests {
                     )],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a", "b"],
             })
         );
@@ -243,6 +262,7 @@ mod tests {
                     ],
                 }],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a", "b", "c"],
             })
         );
@@ -266,6 +286,7 @@ mod tests {
                     }
                 ],
                 where_clauses: vec![],
+                set_clauses: vec![],
                 return_clause: vec!["a", "b", "c"],
             })
         );
@@ -284,6 +305,7 @@ mod tests {
                     "a",
                     Expression::Literal(Literal::Integer(42))
                 )],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -302,6 +324,7 @@ mod tests {
                     },
                     Expression::Parameter("min_age"),
                 )],
+                set_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -344,7 +367,52 @@ mod tests {
                         key: "fake",
                     })),
                 )],
+                set_clauses: vec![],
                 return_clause: vec!["e"],
+            })
+        );
+    }
+
+    #[test]
+    fn set_clauses_work() {
+        assert_eq!(
+            cypher::query("MATCH (a) SET a.answer = 42"),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::with_name("a")),
+                    edges: vec![],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![SetClause {
+                    name: "a",
+                    key: "answer",
+                    value: Expression::Literal(Literal::Integer(42)),
+                }],
+                return_clause: vec![],
+            })
+        );
+
+        assert_eq!(
+            cypher::query("MATCH (a:PERSON) SET a.first = 'Peter' SET a.last = $last_name"),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::new("a", "PERSON")),
+                    edges: vec![],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![
+                    SetClause {
+                        name: "a",
+                        key: "first",
+                        value: Expression::Literal(Literal::Text("Peter")),
+                    },
+                    SetClause {
+                        name: "a",
+                        key: "last",
+                        value: Expression::Parameter("last_name"),
+                    }
+                ],
+                return_clause: vec![],
             })
         );
     }
