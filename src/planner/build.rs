@@ -64,7 +64,9 @@ impl<'a> BuildEnv<'a> {
 
     fn build_load_property(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
         let access_value = match expr {
-            ast::Expression::Placeholder => unimplemented!(),
+            ast::Expression::Parameter(name) => LoadProperty::Parameter {
+                name: name.to_string(),
+            },
             ast::Expression::Literal(literal) => LoadProperty::Constant(match literal {
                 ast::Literal::Integer(i) => Property::Integer(*i),
                 ast::Literal::Real(r) => Property::Real(*r),

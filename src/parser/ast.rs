@@ -105,9 +105,9 @@ pub enum Literal<'src> {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Expression<'src> {
-    Placeholder,
     Literal(Literal<'src>),
     Property { name: &'src str, key: &'src str },
+    Parameter(&'src str),
 }
 
 #[derive(Debug, Clone, PartialEq)]

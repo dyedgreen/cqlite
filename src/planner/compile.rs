@@ -100,6 +100,7 @@ impl CompileEnv {
                 let edge = self.get_stack_idx(*edge)?;
                 Access::EdgeProperty(edge, key.clone())
             }
+            LoadProperty::Parameter { name } => Access::Parameter(name.to_string()),
         };
         if let Some(idx) =
             self.accesses

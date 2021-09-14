@@ -76,4 +76,5 @@ pub(crate) enum LoadProperty {
     Constant(Property),
     PropertyOfNode { node: usize, key: String },
     PropertyOfEdge { edge: usize, key: String },
+    Parameter { name: String },
 }

@@ -3,7 +3,7 @@
 
 use planner::QueryPlan;
 use runtime::{Access, Program, Status, VirtualMachine};
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 use store::{Store, StoreTxn};
 
 pub(crate) mod error;
@@ -89,9 +89,13 @@ impl Graph {
 }
 
 impl<'graph> Statement<'graph> {
+    /// TODO: Do we expose the parameters as a
+    /// hash map, or should there be a `bind(key, value)`
+    /// api?
     pub fn query<'stmt, 'txn>(
         &'stmt self,
         txn: &'txn Txn<'stmt>,
+        parameters: Option<HashMap<String, Property>>,
     ) -> Result<Query<'stmt, 'txn>, Error> {
         Ok(Query {
             stmt: self,
@@ -99,13 +103,14 @@ impl<'graph> Statement<'graph> {
                 &txn.0,
                 &self.program.instructions[..],
                 &self.program.accesses[..],
+                parameters.unwrap_or_else(HashMap::new),
             ),
         })
     }
 
-    pub fn execute(&self) -> Result<(), Error> {
+    pub fn execute(&self, parameters: Option<HashMap<String, Property>>) -> Result<(), Error> {
         let txn = self.graph.txn()?;
-        self.query(&txn)?;
+        self.query(&txn, parameters)?;
         Ok(())
     }
 }
@@ -128,6 +133,7 @@ impl<'query> Match<'query> {
             Some(Access::Edge(_)) => Err(Error::Todo),
             Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
             Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::Parameter(_)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
@@ -139,6 +145,7 @@ impl<'query> Match<'query> {
             Some(Access::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
             Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
             Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
+            Some(Access::Parameter(_)) => Err(Error::Todo),
             None => Err(Error::Todo),
         }
     }
@@ -164,7 +171,7 @@ mod tests {
             .prepare("MATCH (a) -[e]-> (b) RETURN a, b, e")
             .unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -192,7 +199,7 @@ mod tests {
 
         let stmt = graph.prepare("MATCH (a) -[e]- (b) RETURN a, b, e").unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -221,7 +228,7 @@ mod tests {
 
         let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -249,7 +256,7 @@ mod tests {
         let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
         let txn = graph.txn().unwrap();
 
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -286,7 +293,7 @@ mod tests {
             .prepare("MATCH (a) -[e:KNOWS]-> (b) RETURN a, b, e")
             .unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -319,7 +326,7 @@ mod tests {
             )
             .unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!(a.id(), result.node(0).unwrap().id());
@@ -349,11 +356,60 @@ mod tests {
             )
             .unwrap();
         let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn).unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!(b.id(), result.node(0).unwrap().id());
 
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_a_where_with_parameters() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let a = txn
+            .create_node(
+                "PERSON",
+                Some(
+                    vec![
+                        ("name".into(), Property::Text("Peter Parker".into())),
+                        ("age".into(), Property::Real(21.0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            )
+            .unwrap();
+        let b = txn.create_node("PERSON", None).unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id(), None).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph
+            .prepare(
+                "
+                MATCH (a:PERSON)
+                WHERE a.age >= $min_age
+                RETURN a
+                ",
+            )
+            .unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt
+            .query(
+                &txn,
+                Some(
+                    vec![("min_age".into(), Property::Integer(18))]
+                        .into_iter()
+                        .collect(),
+                ),
+            )
+            .unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!(a.id(), result.node(0).unwrap().id());
         assert!(matches.step().unwrap().is_none());
     }
 }

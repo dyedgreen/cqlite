@@ -1,6 +1,7 @@
 use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn};
 use crate::{Error, Property};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
@@ -8,6 +9,8 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     instructions: &'prog [Instruction],
     accesses: &'prog [Access],
     current_inst: usize,
+
+    parameters: HashMap<String, Property>,
 
     pub(crate) node_stack: Vec<Node>,
     pub(crate) edge_stack: Vec<Edge>,
@@ -66,6 +69,7 @@ pub(crate) enum Access {
     Constant(Property),
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
+    Parameter(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,12 +83,15 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         txn: &'txn StoreTxn<'env>,
         instructions: &'prog [Instruction],
         accesses: &'prog [Access],
+        parameters: HashMap<String, Property>,
     ) -> Self {
         Self {
             txn,
             instructions,
             accesses,
             current_inst: 0,
+
+            parameters,
 
             node_stack: Vec::new(),
             edge_stack: Vec::new(),
@@ -100,6 +107,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             Access::Constant(val) => Ok(val),
             Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
             Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
+            Access::Parameter(name) => Ok(self.parameters.get(name).unwrap_or(&Property::Null)),
         }
     }
 

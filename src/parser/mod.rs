@@ -81,7 +81,7 @@ peg::parser! {
 
 
         rule expression() -> Expression<'input>
-            = "?" { Expression::Placeholder }
+            = "$" name:ident() { Expression::Parameter(name) }
             / l:literal() { Expression::Literal(l) }
             / name:ident() "." key:ident() { Expression::Property { name, key } }
 
@@ -283,6 +283,24 @@ mod tests {
                 where_clauses: vec![Condition::IdEq(
                     "a",
                     Expression::Literal(Literal::Integer(42))
+                )],
+                return_clause: vec!["a"],
+            })
+        );
+
+        assert_eq!(
+            cypher::query("MATCH (a) WHERE a.age >= $min_age RETURN a"),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::with_name("a")),
+                    edges: vec![],
+                }],
+                where_clauses: vec![Condition::Ge(
+                    Expression::Property {
+                        name: "a",
+                        key: "age"
+                    },
+                    Expression::Parameter("min_age"),
                 )],
                 return_clause: vec!["a"],
             })

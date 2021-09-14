@@ -6,6 +6,8 @@ pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::store::Store;
     use vm::*;
@@ -39,7 +41,7 @@ mod tests {
         };
 
         let txn = store.txn().unwrap();
-        let mut vm = VirtualMachine::new(&txn, &code, &[]);
+        let mut vm = VirtualMachine::new(&txn, &code, &[], HashMap::new());
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());
