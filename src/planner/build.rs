@@ -329,6 +329,14 @@ impl<'a> BuildEnv<'a> {
             None => Err(Error::Todo),
         }
     }
+
+    fn build_delete_update(&mut self, name: &str) -> Result<UpdateStep, Error> {
+        match self.names.get(name) {
+            Some(&NamedEntity::Node(node)) => Ok(UpdateStep::DeleteNode { node }),
+            Some(&NamedEntity::Edge(edge)) => Ok(UpdateStep::DeleteEdge { edge }),
+            None => Err(Error::Todo),
+        }
+    }
 }
 
 impl QueryPlan {
@@ -345,8 +353,10 @@ impl QueryPlan {
             return Err(Error::Todo);
         }
 
-        if !query.set_clauses.is_empty() && !query.return_clause.is_empty() {
-            // We don't support returning updated data (yet ..?)
+        // We don't support returning updated data (yet ..?)
+        // TODO: We *should* support this!
+        let has_update = !query.set_clauses.is_empty() || !query.delete_clauses.is_empty();
+        if has_update && !query.return_clause.is_empty() {
             return Err(Error::Todo);
         }
 
@@ -371,6 +381,10 @@ impl QueryPlan {
         for clause in &query.set_clauses {
             updates.push(env.build_set_update(clause)?);
         }
+        for name in &query.delete_clauses {
+            updates.push(env.build_delete_update(name)?);
+        }
+        updates.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let mut returns = Vec::with_capacity(query.return_clause.len());
         for &name in &query.return_clause {

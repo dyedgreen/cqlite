@@ -1,4 +1,5 @@
-use crate::store::Property; // TODO: Should it directly use this?
+use crate::store::Property;
+use std::cmp::{Ordering, PartialOrd};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct QueryPlan {
@@ -92,4 +93,34 @@ pub(crate) enum UpdateStep {
         key: String,
         value: LoadProperty,
     },
+    DeleteNode {
+        node: usize,
+    },
+    DeleteEdge {
+        edge: usize,
+    },
+}
+
+impl PartialOrd for UpdateStep {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        use UpdateStep::*;
+        match (self, other) {
+            (
+                SetNodeProperty { .. } | SetEdgeProperty { .. },
+                SetNodeProperty { .. } | SetEdgeProperty { .. },
+            ) => Some(Ordering::Equal),
+            (DeleteNode { .. }, DeleteNode { .. }) => Some(Ordering::Equal),
+            (DeleteEdge { .. }, DeleteEdge { .. }) => Some(Ordering::Equal),
+            (
+                SetNodeProperty { .. } | SetEdgeProperty { .. },
+                DeleteNode { .. } | DeleteEdge { .. },
+            ) => Some(Ordering::Less),
+            (
+                DeleteNode { .. } | DeleteEdge { .. },
+                SetNodeProperty { .. } | SetEdgeProperty { .. },
+            ) => Some(Ordering::Greater),
+            (DeleteNode { .. }, DeleteEdge { .. }) => Some(Ordering::Less),
+            (DeleteEdge { .. }, DeleteNode { .. }) => Some(Ordering::Greater),
+        }
+    }
 }

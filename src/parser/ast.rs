@@ -3,6 +3,7 @@ pub struct Query<'src> {
     pub match_clauses: Vec<MatchClause<'src>>,
     pub where_clauses: Vec<Condition<'src>>,
     pub set_clauses: Vec<SetClause<'src>>,
+    pub delete_clauses: Vec<&'src str>,
     pub return_clause: Vec<&'src str>,
 }
 

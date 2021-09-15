@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use planner::QueryPlan;
-use runtime::{Access, Program, Status, VirtualMachine};
+use runtime::{Access, Program, Status, Update, VirtualMachine};
 use std::{collections::HashMap, path::Path};
 use store::{Store, StoreTxn};
 
@@ -41,6 +41,12 @@ pub struct Query<'stmt, 'txn> {
 /// nodes and edges
 pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
+}
+
+/// TODO: A set of changes produced by a
+/// query.
+pub struct ChangeSet<'stmt> {
+    updates: Vec<Update<'stmt>>,
 }
 
 impl Graph {
@@ -88,6 +94,10 @@ impl Graph {
 }
 
 impl<'graph> Txn<'graph> {
+    pub fn apply(&mut self, changes: ChangeSet) -> Result<(), Error> {
+        VirtualMachine::apply_updates(&mut self.0, changes.updates)
+    }
+
     pub fn commit(self) -> Result<(), Error> {
         self.0.commit()
     }
@@ -121,8 +131,8 @@ impl<'graph> Statement<'graph> {
     ) -> Result<(), Error> {
         let mut query = self.query(&txn, parameters)?;
         while let Some(_) = query.step()? {}
-        let updates = query.vm.finalize()?;
-        VirtualMachine::apply_updates(&mut txn.0, updates)?;
+        let changes = query.changes()?;
+        txn.apply(changes)?;
         Ok(())
     }
 }
@@ -135,6 +145,12 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
             Status::Yield => Ok(Some(Match { query: self })),
             Status::Halt => Ok(None),
         }
+    }
+
+    pub fn changes(self) -> Result<ChangeSet<'stmt>, Error> {
+        Ok(ChangeSet {
+            updates: self.vm.finalize()?,
+        })
     }
 }
 
@@ -449,5 +465,33 @@ mod tests {
             &Property::Integer(42),
             results.node(0).unwrap().property("answer")
         );
+    }
+
+    #[test]
+    fn run_delete() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        txn.create_node("PERSON", None).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph.prepare("MATCH (a:PERSON) RETURN a").unwrap();
+        let txn = graph.txn().unwrap();
+        let mut query = stmt.query(&txn, None).unwrap();
+        assert_eq!(
+            "PERSON",
+            query.step().unwrap().unwrap().node(0).unwrap().label()
+        );
+        assert!(query.step().unwrap().is_none());
+
+        let del_stmt = graph.prepare("MATCH (a:PERSON) DELETE a").unwrap();
+        let mut txn = graph.mut_txn().unwrap();
+        del_stmt.execute(&mut txn, None).unwrap();
+        txn.commit().unwrap();
+
+        let txn = graph.txn().unwrap();
+        let mut query = stmt.query(&txn, None).unwrap();
+        assert!(query.step().unwrap().is_none());
     }
 }

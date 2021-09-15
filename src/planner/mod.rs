@@ -22,6 +22,7 @@ mod tests {
             }],
             where_clauses: vec![],
             set_clauses: vec![],
+            delete_clauses: vec![],
             return_clause: vec!["a", "b"],
         };
 

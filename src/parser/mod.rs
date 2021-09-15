@@ -9,7 +9,7 @@ peg::parser! {
         rule kw_match()     = "MATCH"
         rule kw_create()    = "CREATE"
         rule kw_set()       = "SET"
-        rule ks_delete()    = "DELETE"
+        rule kw_delete()    = "DELETE"
         rule kw_where()     = "WHERE"
         rule kw_return()    = "RETURN"
         rule kw_true()      = "TRUE"
@@ -128,6 +128,10 @@ peg::parser! {
                 SetClause { name: p.0, key: p.1, value: e }
             }
 
+        // e.g. 'DELETE a'
+        rule delete_clause() -> &'input str
+            = kw_delete() __+ name:ident() { name }
+
         // e.g. 'RETURN a, b'
         rule return_clause() -> Vec<&'input str>
             = kw_return() __+ items:( ident() ++ (__* "," __*) ) { items }
@@ -137,8 +141,11 @@ peg::parser! {
               match_clauses:( match_clause() ** (__+) )
               where_clauses:( __* w:( where_clause() ** (__+) )? { w.unwrap_or_else(Vec::new) } )
               set_clauses:( __* s:(set_clause() ** (__+) )? { s.unwrap_or_else(Vec::new) } )
+              delete_clauses:( __* d:(delete_clause() ** (__+) )? { d.unwrap_or_else(Vec::new) } )
               return_clause:( __* r:return_clause()? { r.unwrap_or_else(Vec::new) })
-              __* { Query { match_clauses, where_clauses, set_clauses, return_clause } }
+              __* {
+                Query { match_clauses, where_clauses, set_clauses, delete_clauses, return_clause }
+            }
     }
 }
 
@@ -165,6 +172,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -180,6 +188,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -195,6 +204,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -211,6 +221,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -226,6 +237,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["e", "b"],
             })
         );
@@ -241,6 +253,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a", "b"],
             })
         );
@@ -263,6 +276,7 @@ mod tests {
                 }],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a", "b", "c"],
             })
         );
@@ -287,6 +301,7 @@ mod tests {
                 ],
                 where_clauses: vec![],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a", "b", "c"],
             })
         );
@@ -306,6 +321,7 @@ mod tests {
                     Expression::Literal(Literal::Integer(42))
                 )],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -325,6 +341,7 @@ mod tests {
                     Expression::Parameter("min_age"),
                 )],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["a"],
             })
         );
@@ -368,6 +385,7 @@ mod tests {
                     })),
                 )],
                 set_clauses: vec![],
+                delete_clauses: vec![],
                 return_clause: vec!["e"],
             })
         );
@@ -388,6 +406,7 @@ mod tests {
                     key: "answer",
                     value: Expression::Literal(Literal::Integer(42)),
                 }],
+                delete_clauses: vec![],
                 return_clause: vec![],
             })
         );
@@ -412,6 +431,41 @@ mod tests {
                         value: Expression::Parameter("last_name"),
                     }
                 ],
+                delete_clauses: vec![],
+                return_clause: vec![],
+            })
+        );
+    }
+
+    #[test]
+    fn delete_clauses_work() {
+        assert_eq!(
+            cypher::query("MATCH (a:DEATH_STAR) DELETE a RETURN a"),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::new("a", "DEATH_STAR")),
+                    edges: vec![],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![],
+                delete_clauses: vec!["a"],
+                return_clause: vec!["a"],
+            })
+        );
+
+        assert_eq!(
+            cypher::query("MATCH (a) -[e:KNOWS]-> (b) DELETE b DELETE e"),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::with_name("a")),
+                    edges: vec![(
+                        Edge::right(Annotation::new("e", "KNOWS")),
+                        Node::with_annotation(Annotation::with_name("b")),
+                    )],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![],
+                delete_clauses: vec!["b", "e"],
                 return_clause: vec![],
             })
         );

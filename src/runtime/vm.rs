@@ -166,6 +166,14 @@ pub(crate) enum Instruction {
         key: String,
         value: usize,
     },
+    /// Queue an update that deletes the given `node`.
+    DeleteNode {
+        node: usize,
+    },
+    /// Queue an update that deletes the given `edge`.
+    DeleteEdge {
+        edge: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +190,8 @@ pub(crate) enum Access {
 pub(crate) enum Update<'prog> {
     SetNodeProperty(u64, &'prog str, Property),
     SetEdgeProperty(u64, &'prog str, Property),
+    DeleteNode(u64),
+    DeleteEdge(u64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -425,6 +435,16 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         .push(Update::SetEdgeProperty(edge.id, key, value));
                     self.current_inst += 1;
                 }
+                Instruction::DeleteNode { node } => {
+                    let node = &self.node_stack[*node];
+                    self.updates.push(Update::DeleteNode(node.id));
+                    self.current_inst += 1;
+                }
+                Instruction::DeleteEdge { edge } => {
+                    let edge = &self.edge_stack[*edge];
+                    self.updates.push(Update::DeleteNode(edge.id));
+                    self.current_inst += 1;
+                }
             }
         }
     }
@@ -441,6 +461,8 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             match update {
                 Update::SetNodeProperty(node, key, value) => txn.update_node(node, key, value)?,
                 Update::SetEdgeProperty(edge, key, value) => txn.update_edge(edge, key, value)?,
+                Update::DeleteNode(node) => txn.delete_node(node)?,
+                Update::DeleteEdge(edge) => txn.delete_node(edge)?,
             }
         }
         Ok(())

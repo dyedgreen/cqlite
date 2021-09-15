@@ -93,7 +93,9 @@ impl CompileEnv {
                 | PopNode
                 | PopEdge
                 | SetNodeProperty { .. }
-                | SetEdgeProperty { .. } => (),
+                | SetEdgeProperty { .. }
+                | DeleteNode { .. }
+                | DeleteEdge { .. } => (),
             }
         }
     }
@@ -376,6 +378,14 @@ impl CompileEnv {
                             key: key.to_string(),
                             value,
                         });
+                    }
+                    UpdateStep::DeleteNode { node } => {
+                        let node = self.get_stack_idx(*node)?;
+                        self.instructions.push(Instruction::DeleteNode { node });
+                    }
+                    UpdateStep::DeleteEdge { edge } => {
+                        let edge = self.get_stack_idx(*edge)?;
+                        self.instructions.push(Instruction::DeleteEdge { edge });
                     }
                 }
             }
