@@ -9,7 +9,7 @@ pub(crate) type IndexIter<'t> =
 
 pub(crate) enum EdgeIter<'t> {
     Directed(u64, IndexIter<'t>),
-    Undirected(u64, IndexIter<'t>, IndexIter<'t>),
+    Undirected(u64, Option<IndexIter<'t>>, IndexIter<'t>),
 }
 
 pub(crate) struct DeserializeIter<'t, K, I>
@@ -72,7 +72,7 @@ impl<'t> EdgeIter<'t> {
     pub fn both(txn: &'t StoreTxn<'t>, node: u64) -> Result<Self, Error> {
         let iter_orig = btree::iter(&txn.txn, &txn.origins, Some((&node, None)))?;
         let iter_targ = btree::iter(&txn.txn, &txn.targets, Some((&node, None)))?;
-        Ok(Self::Undirected(node, iter_orig, iter_targ))
+        Ok(Self::Undirected(node, Some(iter_orig), iter_targ))
     }
 }
 
@@ -88,17 +88,21 @@ impl<'t> Iterator for EdgeIter<'t> {
             }
         };
         match self {
-            Self::Directed(id, iter) => iter.next().and_then(filter(*id)),
-            // FIXME: There is an obvious optimization here where we stop reading
-            // the first iterator entirely ...
-            //
+            Self::Directed(id, iter) | Self::Undirected(id, None, iter) => {
+                iter.next().and_then(filter(*id))
+            }
             // It might also be worth, to combine the indices with a key like
             // (u64, u8) / (node, type) / orig_type = 0, target_type = 1, which is
             // ordered; so that pages can be loaded continuously ...
-            Self::Undirected(id, iter_orig, iter_target) => iter_orig
+            Self::Undirected(id, iter_opt, iter_target) => iter_opt
+                .as_mut()
+                .unwrap() // None case matched above, but need ref to opt to assign
                 .next()
                 .and_then(filter(*id))
-                .or_else(|| iter_target.next().and_then(filter(*id))),
+                .or_else(|| {
+                    *iter_opt = None;
+                    iter_target.next().and_then(filter(*id))
+                }),
         }
     }
 }

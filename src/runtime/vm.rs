@@ -24,48 +24,150 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
 /// up being ...)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Instruction {
+    /// Do nothing.
     NoOp,
 
-    Jump(usize),
+    /// Absolute jump to instruction `jump`.
+    Jump {
+        jump: usize,
+    },
+    /// Yield a set of matches.
     Yield,
+    /// Terminate the program.
     Halt,
 
-    IterNodes, // iter all nodes
+    /// Create an iterator over all nodes.
+    IterNodes,
 
-    IterOriginEdges(usize), // iter edges originating from given node in stack
-    IterTargetEdges(usize), // iter edges terminating at given node in stack
-    IterBothEdges(usize),   // iter all edges for given node in stack
+    /// Iterate edges originating from `node`.
+    IterOriginEdges {
+        node: usize,
+    },
+    /// Iterator edges terminating at `node`.
+    IterTargetEdges {
+        node: usize,
+    },
+    /// Iterate all edges connected to `node`.
+    IterBothEdges {
+        node: usize,
+    },
 
-    NextNode(usize), // push next node to stack or pop iterator and jump
-    NextEdge(usize), // push next edge to stack or pop iterator and jump
+    /// Load the next node from the top iterator or pop
+    /// the iterator and jump.
+    LoadNextNode {
+        jump: usize,
+    },
+    /// Load the next edge form the top iterator or pop
+    /// the iterator and jump.
+    LoadNextEdge {
+        jump: usize,
+    },
 
-    LoadOriginNode(usize),       // push origin node of edge to stack
-    LoadTargetNode(usize),       // push target node of edge to stack
-    LoadOtherNode(usize, usize), // load the partner of a (node, edge) pair
+    /// Load the node from which `edge` originates.
+    LoadOriginNode {
+        edge: usize,
+    },
+    /// Load the node at which `edge` terminates.
+    LoadTargetNode {
+        edge: usize,
+    },
+    /// Load the remaining node which belongs to the
+    /// connection formed by `node` and `edge`.
+    LoadOtherNode {
+        node: usize,
+        edge: usize,
+    },
 
     PopNode,
     PopEdge,
 
-    CheckIsOrigin(usize, usize, usize), // given (jump, node, edge), jump if node is not edge origin
-    CheckIsTarget(usize, usize, usize), // given (jump, node, edge), jump if node is not edge target
+    /// Perform a conditional jump if `node` is not
+    /// the origin of `edge`.
+    CheckIsOrigin {
+        jump: usize,
+        node: usize,
+        edge: usize,
+    },
+    /// Perform a conditional jump if `node` is not
+    /// the target of `edge`.
+    CheckIsTarget {
+        jump: usize,
+        node: usize,
+        edge: usize,
+    },
 
-    CheckNodeLabel(usize, usize, String), // given (jump, node, label), jump is the label is different
-    CheckEdgeLabel(usize, usize, String), // given (jump, edge, label), jump is the label is different
+    /// Perform a conditional jump if the label of
+    /// `node` is different from `label`.
+    CheckNodeLabel {
+        jump: usize,
+        node: usize,
+        label: String,
+    },
+    /// Perform a conditional jump if the label of
+    /// `edge` is different from `label`.
+    CheckEdgeLabel {
+        jump: usize,
+        edge: usize,
+        label: String,
+    },
 
-    CheckNodeId(usize, usize, usize), // given (jump, node, id), jump id access(id) != node.id
-    CheckEdgeId(usize, usize, usize), // given (jump, node, id), jump id access(id) != node.id
+    /// Perform a conditional jump if the id of
+    /// `node` is different from `access[id]`.
+    CheckNodeId {
+        jump: usize,
+        node: usize,
+        id: usize,
+    },
+    /// Perform a conditional jump if the id of
+    /// `edge` is different from `access[id]`.
+    CheckEdgeId {
+        jump: usize,
+        edge: usize,
+        id: usize,
+    },
 
-    CheckTrue(usize, usize), // given (jump, property), jump if property is truthy
-    CheckEq(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs = rhs
-    CheckLt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs < rhs
-    CheckGt(usize, usize, usize), // given (jump, lhs, rhs), jump if not lhs > rhs
+    /// Perform a conditional jump if `access[value]`
+    /// is no truthy.
+    CheckTrue {
+        jump: usize,
+        value: usize,
+    },
+    /// Perform a conditional jump if `lhs` is not
+    /// loosely equal to `rhs`.
+    CheckEq {
+        jump: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    /// Perform a conditional jump if not `lhs < rhs`.
+    CheckLt {
+        jump: usize,
+        lhs: usize,
+        rhs: usize,
+    },
+    /// Perform a conditional jump if not `lhs > rhs`.
+    CheckGt {
+        jump: usize,
+        lhs: usize,
+        rhs: usize,
+    },
 
-    SetNodeProperty(usize, usize, String), // given (node, value, key), set node.key = access(value)
-    SetEdgeProperty(usize, usize, String), // given (node, value, key), set edge.key = access(value)
+    /// Queue an update that sets property `key` of
+    /// `node` to `access[value]`.
+    SetNodeProperty {
+        node: usize,
+        key: String,
+        value: usize,
+    },
+    /// Queue an update that sets property `key` of
+    /// `edge` to `access[value]`.
+    SetEdgeProperty {
+        edge: usize,
+        key: String,
+        value: usize,
+    },
 }
 
-/// TODO: An instruction to access a value
-/// this is meant to allow accessing nodes, edges, properties, and constants ...
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Access {
     Node(usize), // on the stack
@@ -134,7 +236,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             match &self.instructions[self.current_inst] {
                 Instruction::NoOp => self.current_inst += 1,
 
-                Instruction::Jump(target) => self.current_inst = *target,
+                Instruction::Jump { jump } => self.current_inst = *jump,
                 Instruction::Yield => {
                     self.current_inst += 1;
                     return Ok(Status::Yield);
@@ -147,23 +249,23 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     self.current_inst += 1;
                 }
 
-                Instruction::IterOriginEdges(node) => {
+                Instruction::IterOriginEdges { node } => {
                     let node = &self.node_stack[*node];
                     self.edge_iters.push(EdgeIter::origins(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
-                Instruction::IterTargetEdges(node) => {
+                Instruction::IterTargetEdges { node } => {
                     let node = &self.node_stack[*node];
                     self.edge_iters.push(EdgeIter::targets(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
-                Instruction::IterBothEdges(node) => {
+                Instruction::IterBothEdges { node } => {
                     let node = &self.node_stack[*node];
                     self.edge_iters.push(EdgeIter::both(&self.txn, node.id)?);
                     self.current_inst += 1;
                 }
 
-                Instruction::NextNode(jump) => {
+                Instruction::LoadNextNode { jump } => {
                     let iter = self.node_iters.last_mut().unwrap();
                     if let Some(entry) = iter.next() {
                         self.node_stack.push(entry?.1);
@@ -173,7 +275,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::NextEdge(jump) => {
+                Instruction::LoadNextEdge { jump } => {
                     let iter = self.edge_iters.last_mut().unwrap();
                     if let Some(edge_id) = iter.next() {
                         self.edge_stack
@@ -185,19 +287,19 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
-                Instruction::LoadOriginNode(edge) => {
+                Instruction::LoadOriginNode { edge } => {
                     let edge = &self.edge_stack[*edge];
                     let node = self.txn.load_node(edge.origin)?.ok_or(Error::Todo)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
-                Instruction::LoadTargetNode(edge) => {
+                Instruction::LoadTargetNode { edge } => {
                     let edge = &self.edge_stack[*edge];
                     let node = self.txn.load_node(edge.target)?.ok_or(Error::Todo)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
-                Instruction::LoadOtherNode(node, edge) => {
+                Instruction::LoadOtherNode { node, edge } => {
                     let node = &self.node_stack[*node];
                     let edge = &self.edge_stack[*edge];
                     let other = if edge.target == node.id {
@@ -218,7 +320,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     self.current_inst += 1;
                 }
 
-                Instruction::CheckIsOrigin(jump, node, edge) => {
+                Instruction::CheckIsOrigin { jump, node, edge } => {
                     let node = &self.node_stack[*node];
                     let edge = &self.edge_stack[*edge];
                     if node.id == edge.origin {
@@ -227,7 +329,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckIsTarget(jump, node, edge) => {
+                Instruction::CheckIsTarget { jump, node, edge } => {
                     let node = &self.node_stack[*node];
                     let edge = &self.edge_stack[*edge];
                     if node.id == edge.target {
@@ -237,7 +339,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
-                Instruction::CheckNodeLabel(jump, node, label) => {
+                Instruction::CheckNodeLabel { jump, node, label } => {
                     let node = &self.node_stack[*node];
                     if node.label.as_str() == label.as_str() {
                         self.current_inst += 1;
@@ -245,7 +347,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckEdgeLabel(jump, edge, label) => {
+                Instruction::CheckEdgeLabel { jump, edge, label } => {
                     let edge = &self.edge_stack[*edge];
                     if edge.label.as_str() == label.as_str() {
                         self.current_inst += 1;
@@ -254,7 +356,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
-                Instruction::CheckNodeId(jump, node, id) => {
+                Instruction::CheckNodeId { jump, node, id } => {
                     let node = &self.node_stack[*node];
                     let id = self.access_property(*id)?.cast_to_id()?;
                     if node.id == id {
@@ -263,7 +365,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckEdgeId(jump, edge, id) => {
+                Instruction::CheckEdgeId { jump, edge, id } => {
                     let edge = &self.node_stack[*edge];
                     let id = self.access_property(*id)?.cast_to_id()?;
                     if edge.id == id {
@@ -273,15 +375,15 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
-                Instruction::CheckTrue(jump, access) => {
-                    let prop = self.access_property(*access)?;
-                    if prop.is_truthy() {
+                Instruction::CheckTrue { jump, value } => {
+                    let value = self.access_property(*value)?;
+                    if value.is_truthy() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckEq(jump, lhs, rhs) => {
+                Instruction::CheckEq { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
                     if lhs.loosely_equals(rhs) {
@@ -290,7 +392,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckLt(jump, lhs, rhs) => {
+                Instruction::CheckLt { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
                     if let Some(Ordering::Less) = lhs.loosely_compare(rhs) {
@@ -299,7 +401,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst = *jump;
                     }
                 }
-                Instruction::CheckGt(jump, lhs, rhs) => {
+                Instruction::CheckGt { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
                     if let Some(Ordering::Greater) = lhs.loosely_compare(rhs) {
@@ -309,14 +411,14 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
-                Instruction::SetNodeProperty(node, value, key) => {
+                Instruction::SetNodeProperty { node, key, value } => {
                     let node = &self.node_stack[*node];
                     let value = self.access_property(*value)?.clone();
                     self.updates
                         .push(Update::SetNodeProperty(node.id, key, value));
                     self.current_inst += 1;
                 }
-                Instruction::SetEdgeProperty(edge, value, key) => {
+                Instruction::SetEdgeProperty { edge, key, value } => {
                     let edge = &self.node_stack[*edge];
                     let value = self.access_property(*value)?.clone();
                     self.updates
@@ -334,8 +436,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    /// FIXME: should be on store txn ...
-    pub fn flush(txn: &mut StoreTxn, updates: Vec<Update>) -> Result<(), Error> {
+    pub fn apply_updates(txn: &mut StoreTxn, updates: Vec<Update>) -> Result<(), Error> {
         for update in updates {
             match update {
                 Update::SetNodeProperty(node, key, value) => txn.update_node(node, key, value)?,

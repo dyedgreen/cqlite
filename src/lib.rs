@@ -95,9 +95,8 @@ impl<'graph> Txn<'graph> {
 }
 
 impl<'graph> Statement<'graph> {
-    /// TODO: Do we expose the parameters as a
-    /// hash map, or should there be a `bind(key, value)`
-    /// api?
+    /// TODO: Have a parameter trait
+    /// TODO: Read matches
     pub fn query<'stmt, 'txn>(
         &'stmt self,
         txn: &'txn Txn<'stmt>,
@@ -114,6 +113,8 @@ impl<'graph> Statement<'graph> {
         })
     }
 
+    /// TODO: Have a parameter trait
+    /// TODO: Write to the database
     pub fn execute(
         &self,
         txn: &mut Txn,
@@ -122,7 +123,7 @@ impl<'graph> Statement<'graph> {
         let mut query = self.query(&txn, parameters)?;
         while let Some(_) = query.step()? {}
         let updates = query.vm.finalize()?;
-        VirtualMachine::flush(&mut txn.0, updates)?;
+        VirtualMachine::apply_updates(&mut txn.0, updates)?;
         Ok(())
     }
 }
@@ -241,9 +242,7 @@ mod tests {
 
         let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
         let txn = graph.txn().unwrap();
-        let txn2 = graph.txn().unwrap();
         let mut matches = stmt.query(&txn, None).unwrap();
-        let mut matches2 = stmt.query(&txn2, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());

@@ -56,16 +56,16 @@ mod tests {
             use Instruction::*;
             vec![
                 IterNodes,
-                NextNode(11),
-                IterOriginEdges(0),
-                NextEdge(9),
-                LoadTargetNode(0),
+                LoadNextNode { jump: 11 },
+                IterOriginEdges { node: 0 },
+                LoadNextEdge { jump: 9 },
+                LoadTargetNode { edge: 0 },
                 Yield,
                 PopNode,
                 PopEdge,
-                Jump(3),
+                Jump { jump: 3 },
                 PopNode,
-                Jump(1),
+                Jump { jump: 1 },
                 Halt,
             ]
         };

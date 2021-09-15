@@ -56,37 +56,37 @@ impl CompileEnv {
         for inst in instructions {
             use Instruction::*;
             match inst {
-                Jump(t)
-                | NextNode(t)
-                | NextEdge(t)
-                | CheckIsOrigin(t, _, _)
-                | CheckIsTarget(t, _, _)
-                | CheckNodeLabel(t, _, _)
-                | CheckEdgeLabel(t, _, _)
-                | CheckNodeId(t, _, _)
-                | CheckEdgeId(t, _, _)
-                | CheckTrue(t, _)
-                | CheckEq(t, _, _)
-                | CheckLt(t, _, _)
-                | CheckGt(t, _, _) => {
-                    if *t == from {
-                        *t = to;
+                Jump { jump }
+                | LoadNextNode { jump }
+                | LoadNextEdge { jump }
+                | CheckIsOrigin { jump, .. }
+                | CheckIsTarget { jump, .. }
+                | CheckNodeLabel { jump, .. }
+                | CheckEdgeLabel { jump, .. }
+                | CheckNodeId { jump, .. }
+                | CheckEdgeId { jump, .. }
+                | CheckTrue { jump, .. }
+                | CheckEq { jump, .. }
+                | CheckLt { jump, .. }
+                | CheckGt { jump, .. } => {
+                    if *jump == from {
+                        *jump = to;
                     }
                 }
                 NoOp
                 | Yield
                 | Halt
                 | IterNodes
-                | IterOriginEdges(_)
-                | IterTargetEdges(_)
-                | IterBothEdges(_)
-                | LoadOriginNode(_)
-                | LoadTargetNode(_)
-                | LoadOtherNode(_, _)
+                | IterOriginEdges { .. }
+                | IterTargetEdges { .. }
+                | IterBothEdges { .. }
+                | LoadOriginNode { .. }
+                | LoadTargetNode { .. }
+                | LoadOtherNode { .. }
                 | PopNode
                 | PopEdge
-                | SetNodeProperty(_, _, _)
-                | SetEdgeProperty(_, _, _) => (),
+                | SetNodeProperty { .. }
+                | SetEdgeProperty { .. } => (),
             }
         }
     }
@@ -136,82 +136,109 @@ impl CompileEnv {
                 );
                 self.instructions.push(Instruction::NoOp);
                 self.compile_filter(plan, b)?;
-                self.instructions[inner_jmp] = Instruction::Jump(self.instructions.len());
+                self.instructions[inner_jmp] = Instruction::Jump {
+                    jump: self.instructions.len(),
+                };
             }
             Filter::Not(inner) => {
                 let start = self.instructions.len();
                 self.compile_filter(plan, inner)?;
                 let end = self.instructions.len();
                 Self::adjust_jumps(&mut self.instructions[start..], JUMP_PLACEHOLDER, end + 1);
-                self.instructions.push(Instruction::Jump(JUMP_PLACEHOLDER));
+                self.instructions.push(Instruction::Jump {
+                    jump: JUMP_PLACEHOLDER,
+                });
             }
 
             Filter::IsOrigin { node, edge } => {
                 let node = self.get_stack_idx(*node)?;
                 let edge = self.get_stack_idx(*edge)?;
-                self.instructions
-                    .push(Instruction::CheckIsOrigin(JUMP_PLACEHOLDER, node, edge))
+                self.instructions.push(Instruction::CheckIsOrigin {
+                    jump: JUMP_PLACEHOLDER,
+                    node,
+                    edge,
+                });
             }
             Filter::IsTarget { node, edge } => {
                 let node = self.get_stack_idx(*node)?;
                 let edge = self.get_stack_idx(*edge)?;
-                self.instructions
-                    .push(Instruction::CheckIsTarget(JUMP_PLACEHOLDER, node, edge))
+                self.instructions.push(Instruction::CheckIsTarget {
+                    jump: JUMP_PLACEHOLDER,
+                    node,
+                    edge,
+                });
             }
 
             Filter::NodeHasLabel { node, label } => {
                 let node = self.get_stack_idx(*node)?;
-                self.instructions.push(Instruction::CheckNodeLabel(
-                    JUMP_PLACEHOLDER,
+                self.instructions.push(Instruction::CheckNodeLabel {
+                    jump: JUMP_PLACEHOLDER,
                     node,
-                    label.clone(),
-                ));
+                    label: label.clone(),
+                });
             }
             Filter::EdgeHasLabel { edge, label } => {
                 let edge = self.get_stack_idx(*edge)?;
-                self.instructions.push(Instruction::CheckEdgeLabel(
-                    JUMP_PLACEHOLDER,
+                self.instructions.push(Instruction::CheckEdgeLabel {
+                    jump: JUMP_PLACEHOLDER,
                     edge,
-                    label.clone(),
-                ));
+                    label: label.clone(),
+                });
             }
 
             Filter::NodeHasId { node, id } => {
                 let node = self.get_stack_idx(*node)?;
-                let acc = self.compile_access(id)?;
-                self.instructions
-                    .push(Instruction::CheckNodeId(JUMP_PLACEHOLDER, node, acc));
+                let id = self.compile_access(id)?;
+                self.instructions.push(Instruction::CheckNodeId {
+                    jump: JUMP_PLACEHOLDER,
+                    node,
+                    id,
+                });
             }
             Filter::EdgeHasId { edge, id } => {
                 let edge = self.get_stack_idx(*edge)?;
-                let acc = self.compile_access(id)?;
-                self.instructions
-                    .push(Instruction::CheckNodeId(JUMP_PLACEHOLDER, edge, acc));
+                let id = self.compile_access(id)?;
+                self.instructions.push(Instruction::CheckEdgeId {
+                    jump: JUMP_PLACEHOLDER,
+                    edge,
+                    id,
+                });
             }
 
             Filter::IsTruthy(load) => {
-                let acc = self.compile_access(load)?;
-                self.instructions
-                    .push(Instruction::CheckTrue(JUMP_PLACEHOLDER, acc));
+                let value = self.compile_access(load)?;
+                self.instructions.push(Instruction::CheckTrue {
+                    jump: JUMP_PLACEHOLDER,
+                    value,
+                });
             }
 
             Filter::Eq(lhs, rhs) => {
                 let lhs = self.compile_access(lhs)?;
                 let rhs = self.compile_access(rhs)?;
-                self.instructions
-                    .push(Instruction::CheckEq(JUMP_PLACEHOLDER, lhs, rhs));
+                self.instructions.push(Instruction::CheckEq {
+                    jump: JUMP_PLACEHOLDER,
+                    lhs,
+                    rhs,
+                });
             }
             Filter::Lt(lhs, rhs) => {
                 let lhs = self.compile_access(lhs)?;
                 let rhs = self.compile_access(rhs)?;
-                self.instructions
-                    .push(Instruction::CheckLt(JUMP_PLACEHOLDER, lhs, rhs));
+                self.instructions.push(Instruction::CheckLt {
+                    jump: JUMP_PLACEHOLDER,
+                    lhs,
+                    rhs,
+                });
             }
             Filter::Gt(lhs, rhs) => {
                 let lhs = self.compile_access(lhs)?;
                 let rhs = self.compile_access(rhs)?;
-                self.instructions
-                    .push(Instruction::CheckGt(JUMP_PLACEHOLDER, lhs, rhs));
+                self.instructions.push(Instruction::CheckGt {
+                    jump: JUMP_PLACEHOLDER,
+                    lhs,
+                    rhs,
+                });
             }
         }
         Ok(())
@@ -228,30 +255,35 @@ impl CompileEnv {
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
                     self.instructions.push(Instruction::PopNode);
-                    self.instructions.push(Instruction::Jump(start + 1));
-                    self.instructions[start + 1] = Instruction::NextNode(self.instructions.len());
+                    self.instructions
+                        .push(Instruction::Jump { jump: start + 1 });
+                    self.instructions[start + 1] = Instruction::LoadNextNode {
+                        jump: self.instructions.len(),
+                    };
                 }
                 MatchStep::LoadOriginNode { name, edge } => {
-                    self.instructions
-                        .push(Instruction::LoadOriginNode(self.get_stack_idx(*edge)?));
+                    self.instructions.push(Instruction::LoadOriginNode {
+                        edge: self.get_stack_idx(*edge)?,
+                    });
                     self.push_node(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
                     self.instructions.push(Instruction::PopNode);
                 }
                 MatchStep::LoadTargetNode { name, edge } => {
-                    self.instructions
-                        .push(Instruction::LoadTargetNode(self.get_stack_idx(*edge)?));
+                    self.instructions.push(Instruction::LoadTargetNode {
+                        edge: self.get_stack_idx(*edge)?,
+                    });
                     self.push_node(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
                     self.instructions.push(Instruction::PopNode);
                 }
                 MatchStep::LoadOtherNode { name, node, edge } => {
-                    self.instructions.push(Instruction::LoadOtherNode(
-                        self.get_stack_idx(*node)?,
-                        self.get_stack_idx(*edge)?,
-                    ));
+                    self.instructions.push(Instruction::LoadOtherNode {
+                        node: self.get_stack_idx(*node)?,
+                        edge: self.get_stack_idx(*edge)?,
+                    });
                     self.push_node(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_node(*name);
@@ -259,37 +291,49 @@ impl CompileEnv {
                 }
 
                 MatchStep::LoadOriginEdge { name, node } => {
-                    self.instructions
-                        .push(Instruction::IterOriginEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::IterOriginEdges {
+                        node: self.get_stack_idx(*node)?,
+                    });
                     self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_edge(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_edge(*name);
                     self.instructions.push(Instruction::PopEdge);
-                    self.instructions.push(Instruction::Jump(start + 1));
-                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
+                    self.instructions
+                        .push(Instruction::Jump { jump: start + 1 });
+                    self.instructions[start + 1] = Instruction::LoadNextEdge {
+                        jump: self.instructions.len(),
+                    };
                 }
                 MatchStep::LoadTargetEdge { name, node } => {
-                    self.instructions
-                        .push(Instruction::IterTargetEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::IterTargetEdges {
+                        node: self.get_stack_idx(*node)?,
+                    });
                     self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_edge(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_edge(*name);
                     self.instructions.push(Instruction::PopEdge);
-                    self.instructions.push(Instruction::Jump(start + 1));
-                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
+                    self.instructions
+                        .push(Instruction::Jump { jump: start + 1 });
+                    self.instructions[start + 1] = Instruction::LoadNextEdge {
+                        jump: self.instructions.len(),
+                    };
                 }
                 MatchStep::LoadEitherEdge { name, node } => {
-                    self.instructions
-                        .push(Instruction::IterBothEdges(self.get_stack_idx(*node)?));
+                    self.instructions.push(Instruction::IterBothEdges {
+                        node: self.get_stack_idx(*node)?,
+                    });
                     self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_edge(*name);
                     self.compile_step(plan, &steps[1..])?;
                     self.pop_edge(*name);
                     self.instructions.push(Instruction::PopEdge);
-                    self.instructions.push(Instruction::Jump(start + 1));
-                    self.instructions[start + 1] = Instruction::NextEdge(self.instructions.len());
+                    self.instructions
+                        .push(Instruction::Jump { jump: start + 1 });
+                    self.instructions[start + 1] = Instruction::LoadNextEdge {
+                        jump: self.instructions.len(),
+                    };
                 }
 
                 MatchStep::Filter(filter) => {
@@ -306,29 +350,30 @@ impl CompileEnv {
             }
             Ok(())
         } else {
-            self.instructions.push(Instruction::Yield);
             for update in &plan.updates {
                 match update {
                     UpdateStep::SetNodeProperty { node, key, value } => {
                         let node = self.get_stack_idx(*node)?;
                         let value = self.compile_access(value)?;
-                        self.instructions.push(Instruction::SetNodeProperty(
+                        self.instructions.push(Instruction::SetNodeProperty {
                             node,
+                            key: key.to_string(),
                             value,
-                            key.to_string(),
-                        ));
+                        });
                     }
                     UpdateStep::SetEdgeProperty { edge, key, value } => {
                         let edge = self.get_stack_idx(*edge)?;
                         let value = self.compile_access(value)?;
-                        self.instructions.push(Instruction::SetEdgeProperty(
+                        self.instructions.push(Instruction::SetEdgeProperty {
                             edge,
+                            key: key.to_string(),
                             value,
-                            key.to_string(),
-                        ));
+                        });
                     }
                 }
             }
+            self.instructions.push(Instruction::Yield);
+
             if self.returns.is_empty() {
                 for value in &plan.returns {
                     self.returns.push(match value {
