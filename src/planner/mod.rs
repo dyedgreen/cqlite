@@ -16,7 +16,7 @@ mod tests {
             match_clauses: vec![ast::MatchClause {
                 start: ast::Node::with_annotation(ast::Annotation::with_name("a")),
                 edges: vec![(
-                    ast::Edge::right(ast::Annotation::empty()),
+                    ast::Edge::right(ast::Annotation::empty(), vec![]),
                     ast::Node::with_annotation(ast::Annotation::with_name("b")),
                 )],
             }],

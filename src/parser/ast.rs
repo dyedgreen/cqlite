@@ -56,14 +56,35 @@ impl<'src> Annotation<'src> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Node<'src> {
     pub annotation: Annotation<'src>,
+    pub properties: Vec<(&'src str, Expression<'src>)>,
 }
 
 impl<'src> Node<'src> {
+    pub fn new(
+        annotation: Annotation<'src>,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    ) -> Self {
+        Self {
+            annotation,
+            properties,
+        }
+    }
+
     pub fn with_annotation(annotation: Annotation<'src>) -> Self {
-        Self { annotation }
+        Self {
+            annotation,
+            properties: Vec::new(),
+        }
+    }
+
+    pub fn with_properties(properties: Vec<(&'src str, Expression<'src>)>) -> Self {
+        Self {
+            annotation: Annotation::empty(),
+            properties,
+        }
     }
 }
 
@@ -74,31 +95,44 @@ pub enum Direction {
     Either,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Edge<'src> {
     pub direction: Direction,
     pub annotation: Annotation<'src>,
+    pub properties: Vec<(&'src str, Expression<'src>)>,
 }
 
 impl<'src> Edge<'src> {
-    pub fn either(annotation: Annotation<'src>) -> Self {
+    pub fn either(
+        annotation: Annotation<'src>,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    ) -> Self {
         Self {
             direction: Direction::Either,
             annotation,
+            properties,
         }
     }
 
-    pub fn left(annotation: Annotation<'src>) -> Self {
+    pub fn left(
+        annotation: Annotation<'src>,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    ) -> Self {
         Self {
             direction: Direction::Left,
             annotation,
+            properties,
         }
     }
 
-    pub fn right(annotation: Annotation<'src>) -> Self {
+    pub fn right(
+        annotation: Annotation<'src>,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    ) -> Self {
         Self {
             direction: Direction::Right,
             annotation,
+            properties,
         }
     }
 }

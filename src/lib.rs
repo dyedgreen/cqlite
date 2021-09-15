@@ -364,6 +364,37 @@ mod tests {
     }
 
     #[test]
+    fn run_a_edge_b_with_property_map() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let a = txn.create_node("PERSON", None).unwrap();
+        txn.update_node(a.id(), "test", Property::Text("hello world!".to_string()))
+            .unwrap();
+        let b = txn.create_node("PERSON", None).unwrap();
+        txn.create_edge("KNOWS", a.id(), b.id(), None).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph
+            .prepare(
+                "
+                MATCH (a:PERSON { test: 'hello world!' }) -[:KNOWS]- (b:PERSON)
+                RETURN a, b
+                ",
+            )
+            .unwrap();
+        let txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&txn, None).unwrap();
+
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!(a.id(), result.node(0).unwrap().id());
+        assert_eq!(b.id(), result.node(1).unwrap().id());
+
+        assert!(matches.step().unwrap().is_none());
+    }
+
+    #[test]
     fn run_a_edge_b_with_where_id() {
         let graph = Graph::open_anon().unwrap();
 

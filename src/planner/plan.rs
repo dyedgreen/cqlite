@@ -119,8 +119,57 @@ impl PartialOrd for UpdateStep {
                 DeleteNode { .. } | DeleteEdge { .. },
                 SetNodeProperty { .. } | SetEdgeProperty { .. },
             ) => Some(Ordering::Greater),
-            (DeleteNode { .. }, DeleteEdge { .. }) => Some(Ordering::Less),
-            (DeleteEdge { .. }, DeleteNode { .. }) => Some(Ordering::Greater),
+            (DeleteNode { .. }, DeleteEdge { .. }) => Some(Ordering::Greater),
+            (DeleteEdge { .. }, DeleteNode { .. }) => Some(Ordering::Less),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_step_order() {
+        let mut steps = vec![
+            UpdateStep::DeleteNode { node: 1 },
+            UpdateStep::SetEdgeProperty {
+                edge: 0,
+                key: "test".into(),
+                value: LoadProperty::Parameter {
+                    name: "test".into(),
+                },
+            },
+            UpdateStep::SetNodeProperty {
+                node: 0,
+                key: "test".into(),
+                value: LoadProperty::Parameter {
+                    name: "test".into(),
+                },
+            },
+            UpdateStep::DeleteEdge { edge: 2 },
+        ];
+        steps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let steps_ord = vec![
+            UpdateStep::SetEdgeProperty {
+                edge: 0,
+                key: "test".into(),
+                value: LoadProperty::Parameter {
+                    name: "test".into(),
+                },
+            },
+            UpdateStep::SetNodeProperty {
+                node: 0,
+                key: "test".into(),
+                value: LoadProperty::Parameter {
+                    name: "test".into(),
+                },
+            },
+            UpdateStep::DeleteEdge { edge: 2 },
+            UpdateStep::DeleteNode { node: 1 },
+        ];
+
+        assert_eq!(steps, steps_ord);
     }
 }

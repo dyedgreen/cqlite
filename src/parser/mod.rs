@@ -60,36 +60,48 @@ peg::parser! {
             / t:text() { Literal::Text(t) }
             / kw_null() { Literal::Null }
 
+        rule expression() -> Expression<'input>
+            = "$" name:ident() { Expression::Parameter(name) }
+            / l:literal() { Expression::Literal(l) }
+            / p:property() { Expression::Property { name: p.0, key: p.1 } }
 
         // e.g. 'hello_world', 'Rust', 'HAS_PROPERTY'
         rule ident() -> &'input str
             = ident:$(alpha()alpha_num()*) { ident }
 
+
         // e.g. 'a', 'a : PERSON', ': KNOWS'
         rule annotation() -> Annotation<'input>
             = name:ident()? label:( _* ":" _* k:ident() { k } )? { Annotation { name, label } }
 
+        // e.g. '{answer: 42, book: 'Hitchhikers Guide'}'
+        rule property_map() -> Vec<(&'input str, Expression<'input>)>
+            = "{" __* entries:( (k:ident() _* ":" _* v:expression() { (k, v) }) ++ (_* "," _*) ) __* "}" { entries }
+
         // e.g. '()', '( a:PERSON )', '(b)', '(a : OTHER_THING)'
         rule node() -> Node<'input>
-            = "(" _* label:annotation() _* ")" { Node::with_annotation(label) }
+            = "(" _* a:annotation() _* p:property_map()? _* ")" {
+                Node::new(a, p.unwrap_or_else(Vec::new))
+            }
 
         // e.g. '-', '<-', '-[ name:KIND ]-', '<-[name]-'
         rule edge() -> Edge<'input>
-            =  "-[" _* a:annotation() _* "]->" { Edge::right(a) }
-            /  "-[" _* a:annotation() _* "]-"  { Edge::either(a) }
-            / "<-[" _* a:annotation() _* "]-"  { Edge::left(a) }
-            / "<-" { Edge::left(Annotation::empty()) }
-            / "->" { Edge::right(Annotation::empty()) }
-            / "-" { Edge::either(Annotation::empty()) }
+            =  "-[" _* a:annotation() _* p:property_map()? _* "]->" {
+                Edge::right(a, p.unwrap_or_else(Vec::new))
+            }
+            /  "-[" _* a:annotation() _* p:property_map()? _* "]-"  {
+                Edge::either(a, p.unwrap_or_else(Vec::new))
+            }
+            / "<-[" _* a:annotation() _* p:property_map()? _* "]-"  {
+                Edge::left(a, p.unwrap_or_else(Vec::new))
+            }
+            / "<-" { Edge::left(Annotation::empty(), Vec::new()) }
+            / "->" { Edge::right(Annotation::empty(), Vec::new()) }
+            / "-" { Edge::either(Annotation::empty(), Vec::new()) }
 
 
         rule property() -> (&'input str, &'input str)
             = name:ident() "." key:ident() { (name, key) }
-
-        rule expression() -> Expression<'input>
-            = "$" name:ident() { Expression::Parameter(name) }
-            / l:literal() { Expression::Literal(l) }
-            / p:property() { Expression::Property { name: p.0, key: p.1 } }
 
         rule condition() -> Condition<'input>= precedence!{
             a:(@) __* kw_and() __* b:@ { Condition::and(a, b) }
@@ -166,7 +178,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::either(Annotation::empty()),
+                        Edge::either(Annotation::empty(), vec![]),
                         Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
@@ -182,7 +194,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::new("a", "LABEL")),
                     edges: vec![(
-                        Edge::left(Annotation::empty()),
+                        Edge::left(Annotation::empty(), vec![]),
                         Node::with_annotation(Annotation::empty())
                     )],
                 }],
@@ -198,7 +210,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::empty()),
                     edges: vec![(
-                        Edge::right(Annotation::empty()),
+                        Edge::right(Annotation::empty(), vec![]),
                         Node::with_annotation(Annotation::with_label("LABEL_ONLY"))
                     )],
                 }],
@@ -215,7 +227,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::right(Annotation::with_name("edge")),
+                        Edge::right(Annotation::with_name("edge"), vec![]),
                         Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
@@ -231,7 +243,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::left(Annotation::new("e", "KNOWS")),
+                        Edge::left(Annotation::new("e", "KNOWS"), vec![]),
                         Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
@@ -247,7 +259,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::either(Annotation::empty()),
+                        Edge::either(Annotation::empty(), vec![]),
                         Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
@@ -265,11 +277,11 @@ mod tests {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![
                         (
-                            Edge::right(Annotation::empty()),
+                            Edge::right(Annotation::empty(), vec![]),
                             Node::with_annotation(Annotation::with_name("b"))
                         ),
                         (
-                            Edge::either(Annotation::empty()),
+                            Edge::either(Annotation::empty(), vec![]),
                             Node::with_annotation(Annotation::with_name("c"))
                         )
                     ],
@@ -287,14 +299,14 @@ mod tests {
                     MatchClause {
                         start: Node::with_annotation(Annotation::with_name("a")),
                         edges: vec![(
-                            Edge::right(Annotation::empty()),
+                            Edge::right(Annotation::empty(), vec![]),
                             Node::with_annotation(Annotation::with_name("b"))
                         )],
                     },
                     MatchClause {
                         start: Node::with_annotation(Annotation::with_name("b")),
                         edges: vec![(
-                            Edge::right(Annotation::empty()),
+                            Edge::right(Annotation::empty(), vec![]),
                             Node::with_annotation(Annotation::with_name("c"))
                         )],
                     }
@@ -303,6 +315,52 @@ mod tests {
                 set_clauses: vec![],
                 delete_clauses: vec![],
                 return_clause: vec!["a", "b", "c"],
+            })
+        );
+    }
+
+    #[test]
+    fn property_maps_work() {
+        assert_eq!(
+            cypher::query("MATCH (a { answer: 42, book: $book}) - (b) RETURN a "),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::new(
+                        Annotation::with_name("a"),
+                        vec![
+                            ("answer", Expression::Literal(Literal::Integer(42))),
+                            ("book", Expression::Parameter("book")),
+                        ]
+                    ),
+                    edges: vec![(
+                        Edge::either(Annotation::empty(), vec![]),
+                        Node::with_annotation(Annotation::with_name("b"))
+                    )],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![],
+                delete_clauses: vec![],
+                return_clause: vec!["a"],
+            })
+        );
+
+        assert_eq!(
+            cypher::query("MATCH (a) -[:KNOWS{since: 'February' } ]- (b) RETURN a "),
+            Ok(Query {
+                match_clauses: vec![MatchClause {
+                    start: Node::with_annotation(Annotation::with_name("a"),),
+                    edges: vec![(
+                        Edge::either(
+                            Annotation::with_label("KNOWS"),
+                            vec![("since", Expression::Literal(Literal::Text("February"))),]
+                        ),
+                        Node::with_annotation(Annotation::with_name("b"))
+                    )],
+                }],
+                where_clauses: vec![],
+                set_clauses: vec![],
+                delete_clauses: vec![],
+                return_clause: vec!["a"],
             })
         );
     }
@@ -358,7 +416,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::right(Annotation::new("e", "KNOWS")),
+                        Edge::right(Annotation::new("e", "KNOWS"), vec![]),
                         Node::with_annotation(Annotation::with_name("b"))
                     )],
                 }],
@@ -459,7 +517,7 @@ mod tests {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
                     edges: vec![(
-                        Edge::right(Annotation::new("e", "KNOWS")),
+                        Edge::right(Annotation::new("e", "KNOWS"), vec![]),
                         Node::with_annotation(Annotation::with_name("b")),
                     )],
                 }],

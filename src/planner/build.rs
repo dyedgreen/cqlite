@@ -1,15 +1,14 @@
+use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
 use crate::Error;
 use crate::{parser::ast, Property};
 use std::collections::HashMap;
 
-use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
-
-pub(crate) struct BuildEnv<'a> {
-    names: HashMap<&'a str, NamedEntity>,
+pub(crate) struct BuildEnv<'src> {
+    names: HashMap<&'src str, NamedEntity>,
     next_name: usize,
 }
 
-impl<'a> BuildEnv<'a> {
+impl<'src> BuildEnv<'src> {
     fn new() -> Self {
         Self {
             names: HashMap::new(),
@@ -38,7 +37,7 @@ impl<'a> BuildEnv<'a> {
         }
     }
 
-    fn create_node(&mut self, name: &'a str) -> Result<usize, Error> {
+    fn create_node(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
             Some(NamedEntity::Node(name)) => Ok(*name),
             Some(NamedEntity::Edge(_)) => Err(Error::Todo),
@@ -50,7 +49,7 @@ impl<'a> BuildEnv<'a> {
         }
     }
 
-    fn create_edge(&mut self, name: &'a str) -> Result<usize, Error> {
+    fn create_edge(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
             Some(NamedEntity::Node(_)) => Err(Error::Todo),
             Some(NamedEntity::Edge(name)) => Ok(*name),
@@ -63,7 +62,7 @@ impl<'a> BuildEnv<'a> {
     }
 
     fn build_load_property(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
-        let access_value = match expr {
+        let load = match expr {
             ast::Expression::Parameter(name) => LoadProperty::Parameter {
                 name: name.to_string(),
             },
@@ -87,7 +86,7 @@ impl<'a> BuildEnv<'a> {
                 }
             }
         };
-        Ok(access_value)
+        Ok(load)
     }
 
     fn build_filter(&mut self, cond: &ast::Condition) -> Result<Filter, Error> {
@@ -136,7 +135,35 @@ impl<'a> BuildEnv<'a> {
         Ok(filter)
     }
 
-    fn build_match(&mut self, clause: &ast::MatchClause<'a>) -> Result<Vec<MatchStep>, Error> {
+    fn build_filters_from_property_map(
+        &mut self,
+        edge_or_node: NamedEntity,
+        property_map: &[(&'src str, ast::Expression<'src>)],
+    ) -> Result<Vec<MatchStep>, Error> {
+        property_map
+            .iter()
+            .map(|(key, value)| {
+                Ok(MatchStep::Filter(match edge_or_node {
+                    NamedEntity::Node(node) => Filter::Eq(
+                        LoadProperty::PropertyOfNode {
+                            node,
+                            key: key.to_string(),
+                        },
+                        self.build_load_property(value)?,
+                    ),
+                    NamedEntity::Edge(edge) => Filter::Eq(
+                        LoadProperty::PropertyOfEdge {
+                            edge,
+                            key: key.to_string(),
+                        },
+                        self.build_load_property(value)?,
+                    ),
+                }))
+            })
+            .collect()
+    }
+
+    fn build_match(&mut self, clause: &ast::MatchClause<'src>) -> Result<Vec<MatchStep>, Error> {
         let mut steps = vec![];
 
         // FIXME: this is an eyesore ...
@@ -160,6 +187,11 @@ impl<'a> BuildEnv<'a> {
                 label: label.to_string(),
             }));
         }
+
+        steps.append(&mut self.build_filters_from_property_map(
+            NamedEntity::Node(prev_node_name),
+            clause.start.properties.as_ref(),
+        )?);
 
         for (edge, node) in &clause.edges {
             let edge_name = if let Some(name) = edge.annotation.name {
@@ -228,6 +260,11 @@ impl<'a> BuildEnv<'a> {
                     label: label.to_string(),
                 }));
             }
+
+            steps.append(&mut self.build_filters_from_property_map(
+                NamedEntity::Edge(edge_name),
+                edge.properties.as_ref(),
+            )?);
 
             prev_node_name = if let Some(name) = node.annotation.name {
                 if let Some(name) = self.get_node(name)? {
@@ -309,12 +346,17 @@ impl<'a> BuildEnv<'a> {
                     label: label.to_string(),
                 }));
             }
+
+            steps.append(&mut self.build_filters_from_property_map(
+                NamedEntity::Node(prev_node_name),
+                node.properties.as_ref(),
+            )?);
         }
 
         Ok(steps)
     }
 
-    fn build_set_update(&mut self, clause: &ast::SetClause<'a>) -> Result<UpdateStep, Error> {
+    fn build_set_update(&mut self, clause: &ast::SetClause<'src>) -> Result<UpdateStep, Error> {
         match self.names.get(clause.name) {
             Some(NamedEntity::Node(node)) => Ok(UpdateStep::SetNodeProperty {
                 node: *node,
