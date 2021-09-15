@@ -6,10 +6,10 @@ pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
+    use crate::planner::{MatchStep, NamedEntity, QueryPlan};
     use crate::store::Store;
+    use std::collections::HashMap;
     use vm::*;
 
     #[test]
@@ -58,5 +58,38 @@ mod tests {
         assert_eq!("KNOWS", vm.edge_stack[0].label());
 
         assert_eq!(Ok(Status::Halt), vm.run());
+    }
+
+    #[test]
+    fn compile_a_to_b() {
+        let plan = QueryPlan {
+            steps: vec![
+                MatchStep::LoadAnyNode { name: 0 },
+                MatchStep::LoadOriginEdge { name: 1, node: 0 },
+                MatchStep::LoadTargetNode { name: 2, edge: 1 },
+            ],
+            updates: vec![],
+            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
+        };
+
+        let code = {
+            use Instruction::*;
+            vec![
+                IterNodes,
+                LoadNextNode { jump: 11 },
+                IterOriginEdges { node: 0 },
+                LoadNextEdge { jump: 9 },
+                LoadTargetNode { edge: 0 },
+                Yield,
+                PopNode,
+                PopEdge,
+                Jump { jump: 3 },
+                PopNode,
+                Jump { jump: 1 },
+                Halt,
+            ]
+        };
+
+        assert_eq!(code, Program::new(&plan).unwrap().instructions);
     }
 }

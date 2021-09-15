@@ -1,5 +1,4 @@
 mod build;
-mod compile;
 mod plan;
 
 pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
@@ -8,7 +7,6 @@ pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, U
 mod tests {
     use super::*;
     use crate::parser::ast;
-    use crate::runtime::Instruction;
     use plan::*;
 
     #[test]
@@ -38,38 +36,5 @@ mod tests {
         };
 
         assert_eq!(plan, QueryPlan::new(&query).unwrap());
-    }
-
-    #[test]
-    fn compile_a_to_b() {
-        let plan = QueryPlan {
-            steps: vec![
-                MatchStep::LoadAnyNode { name: 0 },
-                MatchStep::LoadOriginEdge { name: 1, node: 0 },
-                MatchStep::LoadTargetNode { name: 2, edge: 1 },
-            ],
-            updates: vec![],
-            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
-        };
-
-        let code = {
-            use Instruction::*;
-            vec![
-                IterNodes,
-                LoadNextNode { jump: 11 },
-                IterOriginEdges { node: 0 },
-                LoadNextEdge { jump: 9 },
-                LoadTargetNode { edge: 0 },
-                Yield,
-                PopNode,
-                PopEdge,
-                Jump { jump: 3 },
-                PopNode,
-                Jump { jump: 1 },
-                Halt,
-            ]
-        };
-
-        assert_eq!(code, plan.compile().unwrap().instructions);
     }
 }

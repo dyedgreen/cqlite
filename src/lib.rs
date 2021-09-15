@@ -59,10 +59,9 @@ impl Graph {
         let plan = QueryPlan::new(&ast)?;
         // TODO
         // plan.optimize();
-        let program = plan.compile()?;
         Ok(Statement {
             graph: self,
-            program,
+            program: Program::new(&plan)?,
         })
     }
 
