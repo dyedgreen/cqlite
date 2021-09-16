@@ -4,7 +4,7 @@ pub struct Query<'src> {
     pub where_clauses: Vec<Condition<'src>>,
     pub set_clauses: Vec<SetClause<'src>>,
     pub delete_clauses: Vec<&'src str>,
-    pub return_clause: Vec<&'src str>,
+    pub return_clause: Vec<Expression<'src>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -149,8 +149,19 @@ pub enum Literal<'src> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Expression<'src> {
     Literal(Literal<'src>),
+    IdOf { name: &'src str },
     Property { name: &'src str, key: &'src str },
     Parameter(&'src str),
+}
+
+impl<'src> Expression<'src> {
+    pub fn id_of(name: &'src str) -> Self {
+        Self::IdOf { name }
+    }
+
+    pub fn property(name: &'src str, key: &'src str) -> Self {
+        Self::Property { name, key }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

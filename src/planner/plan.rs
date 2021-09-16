@@ -5,7 +5,7 @@ use std::cmp::{Ordering, PartialOrd};
 pub(crate) struct QueryPlan {
     pub steps: Vec<MatchStep>,
     pub updates: Vec<UpdateStep>,
-    pub returns: Vec<NamedEntity>,
+    pub returns: Vec<LoadProperty>,
 }
 
 /// A step in the logical query plan. The execution model
@@ -64,18 +64,14 @@ impl Filter {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum NamedEntity {
-    Node(usize),
-    Edge(usize),
-}
-
 /// FIXME: The plan does not need to take
 /// ownership here ... (and then these can
 /// be Happy + Copy)
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LoadProperty {
     Constant(Property),
+    IdOfNode { node: usize },
+    IdOfEdge { edge: usize },
     PropertyOfNode { node: usize, key: String },
     PropertyOfEdge { edge: usize, key: String },
     Parameter { name: String },

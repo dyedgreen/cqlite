@@ -11,7 +11,7 @@ mod txn;
 mod types;
 
 pub(crate) use iter::{EdgeIter, NodeIter};
-pub use types::{Edge, Node, Property};
+pub use types::{Edge, Node, Property, PropertyRef};
 
 // alloc the pages to write to
 // them every time ... You can free them

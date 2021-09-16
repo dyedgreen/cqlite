@@ -1,4 +1,4 @@
-use crate::planner::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
+use crate::planner::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
 use crate::runtime::{Access, Instruction};
 use crate::Error;
 use std::collections::HashMap;
@@ -100,9 +100,17 @@ impl CompileEnv {
         }
     }
 
-    fn compile_access(&mut self, access: &LoadProperty) -> Result<usize, Error> {
-        let access = match access {
+    fn compile_access_raw(&self, load: &LoadProperty) -> Result<Access, Error> {
+        Ok(match load {
             LoadProperty::Constant(val) => Access::Constant(val.clone()),
+            LoadProperty::IdOfNode { node } => {
+                let node = self.get_stack_idx(*node)?;
+                Access::NodeId(node)
+            }
+            LoadProperty::IdOfEdge { edge } => {
+                let edge = self.get_stack_idx(*edge)?;
+                Access::EdgeId(edge)
+            }
             LoadProperty::PropertyOfNode { node, key } => {
                 let node = self.get_stack_idx(*node)?;
                 Access::NodeProperty(node, key.clone())
@@ -112,7 +120,11 @@ impl CompileEnv {
                 Access::EdgeProperty(edge, key.clone())
             }
             LoadProperty::Parameter { name } => Access::Parameter(name.to_string()),
-        };
+        })
+    }
+
+    fn compile_access(&mut self, load: &LoadProperty) -> Result<usize, Error> {
+        let access = self.compile_access_raw(load)?;
         if let Some(idx) =
             self.accesses
                 .iter()
@@ -392,11 +404,8 @@ impl CompileEnv {
             self.instructions.push(Instruction::Yield);
 
             if self.returns.is_empty() {
-                for value in &plan.returns {
-                    self.returns.push(match value {
-                        NamedEntity::Node(name) => Access::Node(self.get_stack_idx(*name)?),
-                        NamedEntity::Edge(name) => Access::Edge(self.get_stack_idx(*name)?),
-                    });
+                for load in &plan.returns {
+                    self.returns.push(self.compile_access_raw(load)?);
                 }
             }
             Ok(())

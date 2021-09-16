@@ -1,4 +1,4 @@
-use super::plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
+use super::plan::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
 use crate::Error;
 use crate::{parser::ast, Property};
 use std::collections::HashMap;
@@ -6,6 +6,12 @@ use std::collections::HashMap;
 pub(crate) struct BuildEnv<'src> {
     names: HashMap<&'src str, NamedEntity>,
     next_name: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum NamedEntity {
+    Node(usize),
+    Edge(usize),
 }
 
 impl<'src> BuildEnv<'src> {
@@ -73,6 +79,10 @@ impl<'src> BuildEnv<'src> {
                 ast::Literal::Text(t) => Property::Text(t.to_string()),
                 ast::Literal::Null => Property::Null,
             }),
+            ast::Expression::IdOf { name } => match self.names.get(name).ok_or(Error::Todo)? {
+                NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
+                NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
+            },
             ast::Expression::Property { name, key } => {
                 match self.names.get(name).ok_or(Error::Todo)? {
                     NamedEntity::Node(node) => LoadProperty::PropertyOfNode {
@@ -429,8 +439,8 @@ impl QueryPlan {
         updates.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let mut returns = Vec::with_capacity(query.return_clause.len());
-        for &name in &query.return_clause {
-            returns.push(*env.names.get(name).ok_or(Error::Todo)?);
+        for expr in &query.return_clause {
+            returns.push(env.build_load_property(expr)?);
         }
 
         Ok(QueryPlan {

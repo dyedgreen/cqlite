@@ -1,7 +1,7 @@
 mod build;
 mod plan;
 
-pub(crate) use plan::{Filter, LoadProperty, MatchStep, NamedEntity, QueryPlan, UpdateStep};
+pub(crate) use plan::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
 
 #[cfg(test)]
 mod tests {
@@ -23,7 +23,10 @@ mod tests {
             where_clauses: vec![],
             set_clauses: vec![],
             delete_clauses: vec![],
-            return_clause: vec!["a", "b"],
+            return_clause: vec![
+                ast::Expression::property("a", "name"),
+                ast::Expression::property("b", "name"),
+            ],
         };
 
         let plan = QueryPlan {
@@ -33,7 +36,16 @@ mod tests {
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
             updates: vec![],
-            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
+            returns: vec![
+                LoadProperty::PropertyOfNode {
+                    node: 0,
+                    key: "name".into(),
+                },
+                LoadProperty::PropertyOfNode {
+                    node: 2,
+                    key: "name".into(),
+                },
+            ],
         };
 
         assert_eq!(plan, QueryPlan::new(&query).unwrap());

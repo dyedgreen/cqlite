@@ -1,5 +1,6 @@
+use super::Program;
 use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn, Update};
-use crate::{Error, Property};
+use crate::{Error, Property, PropertyRef};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -12,6 +13,7 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
 
     instructions: &'prog [Instruction],
     accesses: &'prog [Access],
+    returns: &'prog [Access],
     parameters: HashMap<String, Property>,
     current_inst: usize,
 
@@ -180,9 +182,9 @@ pub(crate) enum Instruction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Access {
-    Node(usize), // on the stack
-    Edge(usize), // on the stack
     Constant(Property),
+    NodeId(usize),
+    EdgeId(usize),
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
     Parameter(String),
@@ -197,14 +199,14 @@ pub(crate) enum Status {
 impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     pub fn new(
         txn: &'txn StoreTxn<'env>,
-        instructions: &'prog [Instruction],
-        accesses: &'prog [Access],
+        program: &'prog Program,
         parameters: HashMap<String, Property>,
     ) -> Self {
         Self {
             txn,
-            instructions,
-            accesses,
+            instructions: &program.instructions,
+            accesses: &program.accesses,
+            returns: &program.returns,
             current_inst: 0,
 
             parameters,
@@ -216,15 +218,27 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    pub fn access_property(&self, access: usize) -> Result<&Property, Error> {
-        match &self.accesses[access] {
-            Access::Node(_) => Err(Error::Todo),
-            Access::Edge(_) => Err(Error::Todo),
-            Access::Constant(val) => Ok(val),
-            Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key)),
-            Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key)),
-            Access::Parameter(name) => Ok(self.parameters.get(name).unwrap_or(&Property::Null)),
+    fn access_raw<'p>(&'p self, access: &'p Access) -> Result<PropertyRef<'p>, Error> {
+        match access {
+            Access::Constant(val) => Ok(val.as_ref()),
+            Access::NodeId(node) => Ok(PropertyRef::Id(self.node_stack[*node].id())),
+            Access::EdgeId(edge) => Ok(PropertyRef::Id(self.edge_stack[*edge].id())),
+            Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key).as_ref()),
+            Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key).as_ref()),
+            Access::Parameter(name) => Ok(self
+                .parameters
+                .get(name)
+                .map(Property::as_ref)
+                .unwrap_or(PropertyRef::Null)),
         }
+    }
+
+    pub fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
+        self.access_raw(&self.accesses[access])
+    }
+
+    pub fn access_return(&self, access: usize) -> Result<PropertyRef, Error> {
+        self.access_raw(&self.returns[access])
     }
 
     /// Docs: TODO
@@ -388,7 +402,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::CheckEq { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
-                    if lhs.loosely_equals(rhs) {
+                    if lhs.loosely_equals(&rhs) {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -397,7 +411,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::CheckLt { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
-                    if let Some(Ordering::Less) = lhs.loosely_compare(rhs) {
+                    if let Some(Ordering::Less) = lhs.loosely_compare(&rhs) {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -406,7 +420,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::CheckGt { jump, lhs, rhs } => {
                     let lhs = self.access_property(*lhs)?;
                     let rhs = self.access_property(*rhs)?;
-                    if let Some(Ordering::Greater) = lhs.loosely_compare(rhs) {
+                    if let Some(Ordering::Greater) = lhs.loosely_compare(&rhs) {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -415,7 +429,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::SetNodeProperty { node, key, value } => {
                     let node = &self.node_stack[*node];
-                    let value = self.access_property(*value)?.clone();
+                    let value = self.access_property(*value)?.to_owned();
                     self.txn.queue_update(Update::SetNodeProperty(
                         node.id,
                         key.to_string(),
@@ -425,7 +439,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 }
                 Instruction::SetEdgeProperty { edge, key, value } => {
                     let edge = &self.node_stack[*edge];
-                    let value = self.access_property(*value)?.clone();
+                    let value = self.access_property(*value)?.to_owned();
                     self.txn.queue_update(Update::SetEdgeProperty(
                         edge.id,
                         key.to_string(),

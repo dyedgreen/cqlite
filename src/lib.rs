@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use planner::QueryPlan;
-use runtime::{Access, Program, Status, VirtualMachine};
+use runtime::{Program, Status, VirtualMachine};
 use std::{collections::HashMap, path::Path};
 use store::{Store, StoreTxn};
 
@@ -13,7 +13,7 @@ pub(crate) mod runtime;
 pub(crate) mod store;
 
 pub use error::Error;
-pub use store::{Edge, Node, Property};
+pub use store::{Property, PropertyRef};
 
 /// TODO: A handle to the database
 pub struct Graph {
@@ -106,8 +106,7 @@ impl<'graph> Statement<'graph> {
             stmt: self,
             vm: VirtualMachine::new(
                 &txn.0,
-                &self.program.instructions[..],
-                &self.program.accesses[..],
+                &self.program,
                 parameters.unwrap_or_else(HashMap::new),
             ),
         })
@@ -138,28 +137,9 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 }
 
 impl<'query> Match<'query> {
-    pub fn node(&self, idx: usize) -> Result<&Node, Error> {
-        match self.query.stmt.program.returns.get(idx) {
-            Some(Access::Constant(_)) => Err(Error::Todo),
-            Some(Access::Node(idx)) => Ok(&self.query.vm.node_stack[*idx]),
-            Some(Access::Edge(_)) => Err(Error::Todo),
-            Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
-            Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
-            Some(Access::Parameter(_)) => Err(Error::Todo),
-            None => Err(Error::Todo),
-        }
-    }
-
-    pub fn edge(&self, idx: usize) -> Result<&Edge, Error> {
-        match self.query.stmt.program.returns.get(idx) {
-            Some(Access::Constant(_)) => Err(Error::Todo),
-            Some(Access::Node(_)) => Err(Error::Todo),
-            Some(Access::Edge(idx)) => Ok(&self.query.vm.edge_stack[*idx]),
-            Some(Access::NodeProperty(_, _)) => Err(Error::Todo),
-            Some(Access::EdgeProperty(_, _)) => Err(Error::Todo),
-            Some(Access::Parameter(_)) => Err(Error::Todo),
-            None => Err(Error::Todo),
-        }
+    /// TODO: Should we not return a property ref but accept a 'FromProperty'?
+    pub fn get(&self, idx: usize) -> Result<PropertyRef, Error> {
+        self.query.vm.access_return(idx)
     }
 }
 
@@ -173,27 +153,27 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A", None).unwrap().id;
-        let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, b, None).unwrap();
-        txn.create_edge("KNOWS", b, a, None).unwrap();
+        let a = txn.create_node("PERSON", None).unwrap().id;
+        let b = txn.create_node("PERSON", None).unwrap().id;
+        let eab = txn.create_edge("KNOWS", a, b, None).unwrap().id;
+        let eba = txn.create_edge("KNOWS", b, a, None).unwrap().id;
         txn.commit().unwrap();
 
         let stmt = graph
-            .prepare("MATCH (a) -[e]-> (b) RETURN a, b, e")
+            .prepare("MATCH (a) -[e]-> (b) RETURN ID(a), ID(b), ID(e)")
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("PERSON_B", result.node(1).unwrap().label());
-        assert_eq!("KNOWS", result.edge(2).unwrap().label());
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
+        assert_eq!(PropertyRef::Id(eab), result.get(2).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().label());
-        assert_eq!("PERSON_A", result.node(1).unwrap().label());
-        assert_eq!("KNOWS", result.edge(2).unwrap().label());
+        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(a), result.get(1).unwrap());
+        assert_eq!(PropertyRef::Id(eba), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -204,24 +184,26 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A", None).unwrap().id;
-        let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, b, None).unwrap();
+        let a = txn.create_node("PERSON", None).unwrap().id;
+        let b = txn.create_node("PERSON", None).unwrap().id;
+        let e = txn.create_edge("KNOWS", a, b, None).unwrap().id;
         txn.commit().unwrap();
 
-        let stmt = graph.prepare("MATCH (a) -[e]- (b) RETURN a, b, e").unwrap();
+        let stmt = graph
+            .prepare("MATCH (a) -[e]- (b) RETURN ID(a), ID(b), ID(e)")
+            .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("PERSON_B", result.node(1).unwrap().label());
-        assert_eq!("KNOWS", result.edge(2).unwrap().label());
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
+        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().label());
-        assert_eq!("PERSON_A", result.node(1).unwrap().label());
-        assert_eq!("KNOWS", result.edge(2).unwrap().label());
+        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(a), result.get(1).unwrap());
+        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -232,24 +214,25 @@ mod tests {
 
         // TODO
         let mut txn = graph.store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A", None).unwrap().id;
-        let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, a, None).unwrap();
-        txn.create_edge("KNOWS", b, b, None).unwrap();
+        let a = txn.create_node("PERSON", None).unwrap().id;
+        let b = txn.create_node("PERSON", None).unwrap().id;
+        let e1 = txn.create_edge("KNOWS", a, a, None).unwrap().id;
+        let e2 = txn.create_edge("KNOWS", b, b, None).unwrap().id;
         txn.commit().unwrap();
 
-        let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
+        let stmt = graph
+            .prepare("MATCH (a) -[e]-> (a) RETURN ID(a), ID(e)")
+            .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
-        assert!(matches.step().unwrap().is_none());
+        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
     }
 
     #[test]
@@ -260,30 +243,30 @@ mod tests {
         let mut txn = graph.store.mut_txn().unwrap();
         let a = txn.create_node("PERSON_A", None).unwrap().id;
         let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, a, None).unwrap();
-        txn.create_edge("KNOWS", b, b, None).unwrap();
+        let e1 = txn.create_edge("KNOWS", a, a, None).unwrap().id;
+        let e2 = txn.create_edge("KNOWS", b, b, None).unwrap().id;
         txn.commit().unwrap();
 
-        let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
+        let stmt = graph
+            .prepare("MATCH (a) -[e]- (a) RETURN ID(a), ID(e)")
+            .unwrap();
         let mut txn = graph.txn().unwrap();
 
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
+        let result = matches.step().unwrap().unwrap();
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
-
+        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
-
-        let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_B", result.node(0).unwrap().label());
-        assert_eq!("KNOWS", result.edge(1).unwrap().label());
+        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -296,20 +279,20 @@ mod tests {
         let mut txn = graph.store.mut_txn().unwrap();
         let a = txn.create_node("PERSON_A", None).unwrap().id;
         let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, b, None).unwrap();
+        let e = txn.create_edge("KNOWS", a, b, None).unwrap().id;
         txn.create_edge("HEARD_OF", b, a, None).unwrap();
         txn.commit().unwrap();
 
         let stmt = graph
-            .prepare("MATCH (a) -[e:KNOWS]-> (b) RETURN a, b, e")
+            .prepare("MATCH (a) -[e:KNOWS]-> (b) RETURN ID(a), ID(b), ID(e)")
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!("PERSON_A", result.node(0).unwrap().label());
-        assert_eq!("PERSON_B", result.node(1).unwrap().label());
-        assert_eq!("KNOWS", result.edge(2).unwrap().label());
+        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
+        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -330,18 +313,18 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                        MATCH (a:PERSON) -[:KNOWS]- (b:PERSON)
-                        WHERE a.test = 42
-                        RETURN a, b
-                        ",
+                            MATCH (a:PERSON) -[:KNOWS]- (b:PERSON)
+                            WHERE a.test = 42
+                            RETURN ID(a), ID(b)
+                            ",
             )
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(a.id(), result.node(0).unwrap().id());
-        assert_eq!(b.id(), result.node(1).unwrap().id());
+        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(b.id()), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -362,17 +345,17 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                        MATCH (a:PERSON { test: 'hello world!' }) -[:KNOWS]- (b:PERSON)
-                        RETURN a, b
-                        ",
+                MATCH (a:PERSON { test: 'hello world!' }) -[:KNOWS]- (b:PERSON)
+                RETURN ID(a), ID(b)
+                ",
             )
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(a.id(), result.node(0).unwrap().id());
-        assert_eq!(b.id(), result.node(1).unwrap().id());
+        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
+        assert_eq!(PropertyRef::Id(b.id()), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -391,17 +374,17 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                        MATCH (a:PERSON)
-                        WHERE 1 = ID ( a )
-                        RETURN a
-                        ",
+                MATCH (a:PERSON)
+                WHERE 1 = ID ( a )
+                RETURN ID(a)
+                ",
             )
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(b.id(), result.node(0).unwrap().id());
+        assert_eq!(PropertyRef::Id(1), result.get(0).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -432,10 +415,10 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                        MATCH (a:PERSON)
-                        WHERE a.age >= $min_age
-                        RETURN a
-                        ",
+                MATCH (a:PERSON)
+                WHERE a.age >= $min_age
+                RETURN ID(a)
+                ",
             )
             .unwrap();
         let mut txn = graph.txn().unwrap();
@@ -451,7 +434,7 @@ mod tests {
             .unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(a.id(), result.node(0).unwrap().id());
+        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
         assert!(matches.step().unwrap().is_none());
     }
 
@@ -470,15 +453,12 @@ mod tests {
         txn.commit().unwrap();
 
         let stmt = graph
-            .prepare("MATCH (a:PERSON) WHERE ID(a) = 0 RETURN a")
+            .prepare("MATCH (a:PERSON) WHERE ID(a) = 0 RETURN a.answer")
             .unwrap();
         let mut txn = graph.txn().unwrap();
         let mut query = stmt.query(&mut txn, None).unwrap();
         let results = query.step().unwrap().unwrap();
-        assert_eq!(
-            &Property::Integer(42),
-            results.node(0).unwrap().property("answer")
-        );
+        assert_eq!(PropertyRef::Integer(42), results.get(0).unwrap());
     }
 
     #[test]
@@ -490,12 +470,12 @@ mod tests {
         txn.create_node("PERSON", None).unwrap();
         txn.commit().unwrap();
 
-        let stmt = graph.prepare("MATCH (a:PERSON) RETURN a").unwrap();
+        let stmt = graph.prepare("MATCH (a:PERSON) RETURN ID(a)").unwrap();
         let mut txn = graph.txn().unwrap();
         let mut query = stmt.query(&mut txn, None).unwrap();
         assert_eq!(
-            "PERSON",
-            query.step().unwrap().unwrap().node(0).unwrap().label()
+            PropertyRef::Id(0),
+            query.step().unwrap().unwrap().get(0).unwrap(),
         );
         assert!(query.step().unwrap().is_none());
 

@@ -63,6 +63,7 @@ peg::parser! {
         rule expression() -> Expression<'input>
             = "$" name:ident() { Expression::Parameter(name) }
             / l:literal() { Expression::Literal(l) }
+            / kw_id() _* "(" _* n:ident() _* ")" { Expression::IdOf { name: n } }
             / p:property() { Expression::Property { name: p.0, key: p.1 } }
 
         // e.g. 'hello_world', 'Rust', 'HAS_PROPERTY'
@@ -109,14 +110,15 @@ peg::parser! {
             --
             kw_not() _* c:(@) { Condition::not(c) }
             --
+            kw_id() _* "(" _* n:ident() _* ")" _* "=" _* e:expression() { Condition::IdEq(n, e) }
+            e:expression() _* "=" _* kw_id() _* "(" _* n:ident() _* ")" { Condition::IdEq(n, e) }
+            --
             a:expression() _* "="  _* b:expression() { Condition::Eq(a, b) }
             a:expression() _* "<>" _* b:expression() { Condition::Ne(a, b) }
             a:expression() _* "<"  _* b:expression() { Condition::Lt(a, b) }
             a:expression() _* "<=" _* b:expression() { Condition::Le(a, b) }
             a:expression() _* ">"  _* b:expression() { Condition::Gt(a, b) }
             a:expression() _* ">=" _* b:expression() { Condition::Ge(a, b) }
-            kw_id() _* "(" _* n:ident() _* ")" _* "=" _* e:expression() { Condition::IdEq(n, e) }
-            e:expression() _* "=" _* kw_id() _* "(" _* n:ident() _* ")" { Condition::IdEq(n, e) }
             --
             e:expression() { Condition::Expression(e) }
             "(" __* c:condition() __* ")" { c }
@@ -145,8 +147,8 @@ peg::parser! {
             = kw_delete() __+ name:ident() { name }
 
         // e.g. 'RETURN a, b'
-        rule return_clause() -> Vec<&'input str>
-            = kw_return() __+ items:( ident() ++ (__* "," __*) ) { items }
+        rule return_clause() -> Vec<Expression<'input>>
+            = kw_return() __+ items:( expression() ++ (__* "," __*) ) { items }
 
         pub rule query() -> Query<'input>
             = __*
@@ -173,7 +175,7 @@ mod tests {
     #[test]
     fn match_clauses_work() {
         assert_eq!(
-            cypher::query("MATCH (a) - (b) RETURN a "),
+            cypher::query("MATCH (a) - (b) RETURN a.name "),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -185,11 +187,11 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::property("a", "name")],
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a:LABEL) <- ( )\nRETURN a"),
+            cypher::query("MATCH (a:LABEL) <- ( )\nRETURN ID(a)"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::new("a", "LABEL")),
@@ -201,11 +203,11 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::id_of("a")],
             })
         );
         assert_eq!(
-            cypher::query(" MATCH () -> (:LABEL_ONLY) RETURN a"),
+            cypher::query(" MATCH () -> (:LABEL_ONLY) RETURN a.test"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::empty()),
@@ -217,12 +219,12 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::property("a", "test")],
             })
         );
 
         assert_eq!(
-            cypher::query("MATCH \n (a)  -[edge]->  (b) RETURN a"),
+            cypher::query("MATCH \n (a)  -[edge]->  (b) RETURN ID(edge)"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -234,11 +236,11 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::id_of("edge")],
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a) <-[e:KNOWS]- (b) RETURN e, b"),
+            cypher::query("MATCH (a) <-[e:KNOWS]- (b) RETURN e.since, b.name"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -250,11 +252,14 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["e", "b"],
+                return_clause: vec![
+                    Expression::property("e", "since"),
+                    Expression::property("b", "name"),
+                ],
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a) -[]- (b) RETURN a, b"),
+            cypher::query("MATCH (a) -[]- (b) RETURN ID(a), $test"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -266,12 +271,12 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a", "b"],
+                return_clause: vec![Expression::id_of("a"), Expression::Parameter("test")],
             })
         );
 
         assert_eq!(
-            cypher::query("MATCH (a) -> (b) - (c) RETURN a , b, c"),
+            cypher::query("MATCH (a) -> (b) - (c) RETURN a.a , b.b, c.c"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -289,11 +294,15 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a", "b", "c"],
+                return_clause: vec![
+                    Expression::property("a", "a"),
+                    Expression::property("b", "b"),
+                    Expression::property("c", "c"),
+                ],
             })
         );
         assert_eq!(
-            cypher::query("MATCH (a) -> (b) MATCH (b) -> (c) RETURN a,b,c"),
+            cypher::query("MATCH (a) -> (b) MATCH (b) -> (c) RETURN a.a,b.b,c.c"),
             Ok(Query {
                 match_clauses: vec![
                     MatchClause {
@@ -314,7 +323,11 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a", "b", "c"],
+                return_clause: vec![
+                    Expression::property("a", "a"),
+                    Expression::property("b", "b"),
+                    Expression::property("c", "c"),
+                ],
             })
         );
     }
@@ -322,7 +335,7 @@ mod tests {
     #[test]
     fn property_maps_work() {
         assert_eq!(
-            cypher::query("MATCH (a { answer: 42, book: $book}) - (b) RETURN a "),
+            cypher::query("MATCH (a { answer: 42, book: $book}) - (b) RETURN ID(a)"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::new(
@@ -340,12 +353,12 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::id_of("a")],
             })
         );
 
         assert_eq!(
-            cypher::query("MATCH (a) -[:KNOWS{since: 'February' } ]- (b) RETURN a "),
+            cypher::query("MATCH (a) -[:KNOWS{since: 'February' } ]- (b)"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a"),),
@@ -360,7 +373,7 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![],
             })
         );
     }
@@ -368,7 +381,7 @@ mod tests {
     #[test]
     fn where_clauses_work() {
         assert_eq!(
-            cypher::query("MATCH (a) WHERE ID(a) = 42 RETURN a"),
+            cypher::query("MATCH (a) WHERE ID(a) = 42 RETURN a.name"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -380,12 +393,12 @@ mod tests {
                 )],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::property("a", "name")],
             })
         );
 
         assert_eq!(
-            cypher::query("MATCH (a) WHERE a.age >= $min_age RETURN a"),
+            cypher::query("MATCH (a) WHERE a.age >= $min_age RETURN a.age"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::with_name("a")),
@@ -400,7 +413,7 @@ mod tests {
                 )],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::property("a", "age")],
             })
         );
 
@@ -409,7 +422,7 @@ mod tests {
                 "
                 MATCH (a) -[e:KNOWS]-> (b)
                 WHERE a.age > 42 AND b.name = 'Peter Parker' OR NOT e.fake
-                RETURN e
+                RETURN e.since
                 "
             ),
             Ok(Query {
@@ -444,7 +457,7 @@ mod tests {
                 )],
                 set_clauses: vec![],
                 delete_clauses: vec![],
-                return_clause: vec!["e"],
+                return_clause: vec![Expression::property("e", "since")],
             })
         );
     }
@@ -498,7 +511,7 @@ mod tests {
     #[test]
     fn delete_clauses_work() {
         assert_eq!(
-            cypher::query("MATCH (a:DEATH_STAR) DELETE a RETURN a"),
+            cypher::query("MATCH (a:DEATH_STAR) DELETE a RETURN ID(a)"),
             Ok(Query {
                 match_clauses: vec![MatchClause {
                     start: Node::with_annotation(Annotation::new("a", "DEATH_STAR")),
@@ -507,7 +520,7 @@ mod tests {
                 where_clauses: vec![],
                 set_clauses: vec![],
                 delete_clauses: vec!["a"],
-                return_clause: vec!["a"],
+                return_clause: vec![Expression::id_of("a")],
             })
         );
 

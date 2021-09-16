@@ -50,6 +50,18 @@ pub enum Property {
     Null,
 }
 
+/// TODO: A reference to a single property
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PropertyRef<'prop> {
+    Id(u64),
+    Integer(i64),
+    Real(f64),
+    Boolean(bool),
+    Text(&'prop str),
+    Blob(&'prop [u8]),
+    Null,
+}
+
 /// TODO: A single node
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
@@ -97,9 +109,35 @@ impl Edge {
 }
 
 impl Property {
-    pub(crate) fn loosely_equals(&self, other: &Property) -> bool {
-        fn eq(lhs: &Property, rhs: &Property) -> bool {
-            use Property::*;
+    pub fn as_ref(&self) -> PropertyRef {
+        match self {
+            Property::Id(id) => PropertyRef::Id(*id),
+            Property::Integer(num) => PropertyRef::Integer(*num),
+            Property::Real(num) => PropertyRef::Real(*num),
+            Property::Boolean(val) => PropertyRef::Boolean(*val),
+            Property::Text(text) => PropertyRef::Text(text),
+            Property::Blob(bytes) => PropertyRef::Blob(bytes),
+            Property::Null => PropertyRef::Null,
+        }
+    }
+}
+
+impl<'prop> PropertyRef<'prop> {
+    pub fn to_owned(&self) -> Property {
+        match self {
+            PropertyRef::Id(id) => Property::Id(*id),
+            PropertyRef::Integer(num) => Property::Integer(*num),
+            PropertyRef::Real(num) => Property::Real(*num),
+            PropertyRef::Boolean(val) => Property::Boolean(*val),
+            PropertyRef::Text(text) => Property::Text(text.to_string()),
+            PropertyRef::Blob(bytes) => Property::Blob(bytes.to_vec()),
+            PropertyRef::Null => Property::Null,
+        }
+    }
+
+    pub(crate) fn loosely_equals(&self, other: &PropertyRef) -> bool {
+        fn eq(lhs: &PropertyRef, rhs: &PropertyRef) -> bool {
+            use PropertyRef::*;
             match (lhs, rhs) {
                 (Integer(i), Real(r)) => *i as f64 == *r,
                 _ => false,
@@ -108,8 +146,8 @@ impl Property {
         self == other || eq(self, other) || eq(other, self)
     }
 
-    pub(crate) fn loosely_compare(&self, other: &Property) -> Option<Ordering> {
-        use Property::*;
+    pub(crate) fn loosely_compare(&self, other: &PropertyRef) -> Option<Ordering> {
+        use PropertyRef::*;
         match (self, other) {
             (Integer(lhs), Integer(rhs)) => lhs.partial_cmp(rhs),
             (Real(lhs), Real(rhs)) => lhs.partial_cmp(rhs),
@@ -132,7 +170,7 @@ impl Property {
     }
 
     pub(crate) fn cast_to_id(&self) -> Result<u64, Error> {
-        use Property::*;
+        use PropertyRef::*;
         match self {
             &Id(val) => Ok(val),
             &Integer(val) => Ok(val.try_into().map_err(|_| Error::Todo)?),

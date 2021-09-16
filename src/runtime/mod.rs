@@ -7,7 +7,7 @@ pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::planner::{MatchStep, NamedEntity, QueryPlan};
+    use crate::planner::{MatchStep, QueryPlan};
     use crate::store::Store;
     use std::collections::HashMap;
     use vm::*;
@@ -22,7 +22,7 @@ mod tests {
         txn.create_edge("KNOWS", b, a, None).unwrap();
         txn.commit().unwrap();
 
-        let code = {
+        let instructions = {
             use Instruction::*;
             vec![
                 IterNodes,
@@ -39,9 +39,14 @@ mod tests {
                 Halt,
             ]
         };
+        let prog = Program {
+            instructions,
+            accesses: vec![],
+            returns: vec![],
+        };
 
         let mut txn = store.txn().unwrap();
-        let mut vm = VirtualMachine::new(&mut txn, &code, &[], HashMap::new());
+        let mut vm = VirtualMachine::new(&mut txn, &prog, HashMap::new());
 
         assert_eq!(Ok(Status::Yield), vm.run());
         assert_eq!(2, vm.node_stack.len());
@@ -69,7 +74,7 @@ mod tests {
                 MatchStep::LoadTargetNode { name: 2, edge: 1 },
             ],
             updates: vec![],
-            returns: vec![NamedEntity::Node(0), NamedEntity::Node(2)],
+            returns: vec![],
         };
 
         let code = {
