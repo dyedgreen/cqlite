@@ -4,36 +4,36 @@ use sanakirja::{btree, Env, UnsizedStorable};
 use serde::Deserialize;
 use std::marker::PhantomData;
 
-pub(crate) type IndexIter<'t> =
-    btree::Iter<'t, DynTxn<&'t Env>, u64, u64, btree::page::Page<u64, u64>>;
+pub(crate) type IndexIter<'txn> =
+    btree::Iter<'txn, DynTxn<&'txn Env>, u64, u64, btree::page::Page<u64, u64>>;
 
-pub(crate) enum EdgeIter<'t> {
-    Directed(u64, IndexIter<'t>),
-    Undirected(u64, Option<IndexIter<'t>>, IndexIter<'t>),
+pub(crate) enum EdgeIter<'txn> {
+    Directed(u64, IndexIter<'txn>),
+    Undirected(u64, Option<IndexIter<'txn>>, IndexIter<'txn>),
 }
 
-pub(crate) struct DeserializeIter<'t, K, I>
+pub(crate) struct DeserializeIter<'txn, K, I>
 where
     K: UnsizedStorable,
-    I: Deserialize<'t>,
+    I: Deserialize<'txn>,
 {
-    inner: btree::Iter<'t, DynTxn<&'t Env>, K, [u8], btree::page_unsized::Page<K, [u8]>>,
-    _item: PhantomData<&'t I>,
+    inner: btree::Iter<'txn, DynTxn<&'txn Env>, K, [u8], btree::page_unsized::Page<K, [u8]>>,
+    _item: PhantomData<&'txn I>,
 }
 
-pub(crate) type NodeIter<'t> = DeserializeIter<'t, u64, Node>;
+pub(crate) type NodeIter<'txn> = DeserializeIter<'txn, u64, Node>;
 
-impl<'t, K, I> DeserializeIter<'t, K, I>
+impl<'txn, K, I> DeserializeIter<'txn, K, I>
 where
     K: UnsizedStorable,
-    I: Deserialize<'t>,
+    I: Deserialize<'txn>,
 {
     pub(crate) fn new(
-        txn: &'t DynTxn<&'t Env>,
+        txn: &'txn StoreTxn<'txn>,
         db: &btree::UDb<K, [u8]>,
         origin: Option<K>,
     ) -> Result<Self, Error> {
-        let inner = btree::iter(txn, db, origin.as_ref().map(|key| (key, None)))?;
+        let inner = btree::iter(&txn.txn, db, origin.as_ref().map(|key| (key, None)))?;
         Ok(Self {
             inner,
             _item: PhantomData,
@@ -41,12 +41,12 @@ where
     }
 }
 
-impl<'t, K, I> Iterator for DeserializeIter<'t, K, I>
+impl<'txn, K, I> Iterator for DeserializeIter<'txn, K, I>
 where
-    K: 't + UnsizedStorable,
-    I: Deserialize<'t>,
+    K: 'txn + UnsizedStorable,
+    I: Deserialize<'txn>,
 {
-    type Item = Result<(&'t K, I), Error>;
+    type Item = Result<(&'txn K, I), Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|res| {
@@ -58,25 +58,25 @@ where
     }
 }
 
-impl<'t> EdgeIter<'t> {
-    pub fn origins(txn: &'t StoreTxn<'t>, node: u64) -> Result<Self, Error> {
+impl<'txn> EdgeIter<'txn> {
+    pub fn origins(txn: &'txn StoreTxn<'txn>, node: u64) -> Result<Self, Error> {
         let iter = btree::iter(&txn.txn, &txn.origins, Some((&node, None)))?;
         Ok(Self::Directed(node, iter))
     }
 
-    pub fn targets(txn: &'t StoreTxn<'t>, node: u64) -> Result<Self, Error> {
+    pub fn targets(txn: &'txn StoreTxn<'txn>, node: u64) -> Result<Self, Error> {
         let iter = btree::iter(&txn.txn, &txn.targets, Some((&node, None)))?;
         Ok(Self::Directed(node, iter))
     }
 
-    pub fn both(txn: &'t StoreTxn<'t>, node: u64) -> Result<Self, Error> {
+    pub fn both(txn: &'txn StoreTxn<'txn>, node: u64) -> Result<Self, Error> {
         let iter_orig = btree::iter(&txn.txn, &txn.origins, Some((&node, None)))?;
         let iter_targ = btree::iter(&txn.txn, &txn.targets, Some((&node, None)))?;
         Ok(Self::Undirected(node, Some(iter_orig), iter_targ))
     }
 }
 
-impl<'t> Iterator for EdgeIter<'t> {
+impl<'txn> Iterator for EdgeIter<'txn> {
     type Item = Result<u64, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

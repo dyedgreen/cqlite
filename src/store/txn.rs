@@ -28,6 +28,13 @@ impl<E: Borrow<Env>> DynTxn<E> {
             DynTxn::MutTxn(txn) => Ok(txn.commit()?),
         }
     }
+
+    pub fn is_mut(&self) -> bool {
+        match self {
+            DynTxn::Txn(_) => false,
+            DynTxn::MutTxn(_) => true,
+        }
+    }
 }
 
 impl<E: Borrow<Env>> LoadPage for DynTxn<E> {

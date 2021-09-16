@@ -1,8 +1,12 @@
-use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn};
+use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn, Update};
 use crate::{Error, Property};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
+/// Runtime to execute a compiled query program. Note that the
+/// transaction takes an immutable borrow, but expects to be the
+/// only borrow; otherwise errors may occur when trying to enqueue
+/// updates.
 pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     txn: &'txn StoreTxn<'env>,
 
@@ -15,8 +19,6 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     pub(crate) edge_stack: Vec<Edge>,
     node_iters: Vec<NodeIter<'txn>>,
     edge_iters: Vec<EdgeIter<'txn>>,
-
-    updates: Vec<Update<'prog>>,
 }
 
 /// TODO: Consider to do a Cranelift JIT
@@ -186,14 +188,6 @@ pub(crate) enum Access {
     Parameter(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Update<'prog> {
-    SetNodeProperty(u64, &'prog str, Property),
-    SetEdgeProperty(u64, &'prog str, Property),
-    DeleteNode(u64),
-    DeleteEdge(u64),
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Status {
     Yield,
@@ -219,8 +213,6 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             edge_stack: Vec::new(),
             node_iters: Vec::new(),
             edge_iters: Vec::new(),
-
-            updates: Vec::new(),
         }
     }
 
@@ -255,7 +247,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::IterNodes => {
                     self.node_iters
-                        .push(NodeIter::new(&self.txn.txn, &self.txn.nodes, None)?);
+                        .push(NodeIter::new(&self.txn, &self.txn.nodes, None)?);
                     self.current_inst += 1;
                 }
 
@@ -424,48 +416,35 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::SetNodeProperty { node, key, value } => {
                     let node = &self.node_stack[*node];
                     let value = self.access_property(*value)?.clone();
-                    self.updates
-                        .push(Update::SetNodeProperty(node.id, key, value));
+                    self.txn.queue_update(Update::SetNodeProperty(
+                        node.id,
+                        key.to_string(),
+                        value,
+                    ))?;
                     self.current_inst += 1;
                 }
                 Instruction::SetEdgeProperty { edge, key, value } => {
                     let edge = &self.node_stack[*edge];
                     let value = self.access_property(*value)?.clone();
-                    self.updates
-                        .push(Update::SetEdgeProperty(edge.id, key, value));
+                    self.txn.queue_update(Update::SetEdgeProperty(
+                        edge.id,
+                        key.to_string(),
+                        value,
+                    ))?;
                     self.current_inst += 1;
                 }
                 Instruction::DeleteNode { node } => {
                     let node = &self.node_stack[*node];
-                    self.updates.push(Update::DeleteNode(node.id));
+                    self.txn.queue_update(Update::DeleteNode(node.id))?;
                     self.current_inst += 1;
                 }
                 Instruction::DeleteEdge { edge } => {
                     let edge = &self.edge_stack[*edge];
-                    self.updates.push(Update::DeleteNode(edge.id));
+                    self.txn.queue_update(Update::DeleteNode(edge.id))?;
                     self.current_inst += 1;
                 }
             }
         }
-    }
-
-    pub fn finalize(self) -> Result<Vec<Update<'prog>>, Error> {
-        match self.instructions[self.current_inst] {
-            Instruction::Halt => Ok(self.updates),
-            _ => Err(Error::Todo),
-        }
-    }
-
-    pub fn apply_updates(txn: &mut StoreTxn, updates: Vec<Update>) -> Result<(), Error> {
-        for update in updates {
-            match update {
-                Update::SetNodeProperty(node, key, value) => txn.update_node(node, key, value)?,
-                Update::SetEdgeProperty(edge, key, value) => txn.update_edge(edge, key, value)?,
-                Update::DeleteNode(node) => txn.delete_node(node)?,
-                Update::DeleteEdge(edge) => txn.delete_node(edge)?,
-            }
-        }
-        Ok(())
     }
 }
 

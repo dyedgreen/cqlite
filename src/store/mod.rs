@@ -3,6 +3,7 @@ use sanakirja::btree::{Db, UDb};
 use sanakirja::{btree, Env, MutTxn, RootDb, Storable, UnsizedStorable};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::RwLock;
 use txn::DynTxn;
 
 mod iter;
@@ -26,14 +27,23 @@ pub(crate) struct Store {
     pub env: Env,
 }
 
-pub(crate) struct StoreTxn<'a> {
-    pub txn: DynTxn<&'a Env>,
+pub(crate) struct StoreTxn<'env> {
+    txn: DynTxn<&'env Env>,
+    updates: RwLock<Vec<Update>>,
 
     pub nodes: UDb<u64, [u8]>,
     pub edges: UDb<u64, [u8]>,
 
     pub origins: Db<u64, u64>,
     pub targets: Db<u64, u64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Update {
+    SetNodeProperty(u64, String, Property),
+    SetEdgeProperty(u64, String, Property),
+    DeleteNode(u64),
+    DeleteEdge(u64),
 }
 
 impl Store {
@@ -62,6 +72,7 @@ impl Store {
         let targets = Self::get_db(&mut txn, DB_TARGETS)?;
         Ok(StoreTxn {
             txn: DynTxn::MutTxn(txn),
+            updates: RwLock::new(Vec::new()),
             nodes,
             edges,
             origins,
@@ -77,6 +88,7 @@ impl Store {
         let targets = txn.root_db(DB_TARGETS).ok_or(Error::Todo)?;
         Ok(StoreTxn {
             txn: DynTxn::Txn(txn),
+            updates: RwLock::new(Vec::new()),
             nodes,
             edges,
             origins,
@@ -224,7 +236,30 @@ impl<'e> StoreTxn<'e> {
         Ok(())
     }
 
+    pub fn queue_update(&self, update: Update) -> Result<(), Error> {
+        if self.txn.is_mut() {
+            self.updates.try_write()?.push(update);
+            Ok(())
+        } else {
+            Err(Error::Todo)
+        }
+    }
+
+    pub fn flush(&mut self) -> Result<(), Error> {
+        let updates = std::mem::take(&mut *self.updates.try_write()?);
+        for update in updates {
+            match update {
+                Update::SetNodeProperty(node, key, value) => self.update_node(node, &key, value)?,
+                Update::SetEdgeProperty(edge, key, value) => self.update_edge(edge, &key, value)?,
+                Update::DeleteNode(node) => self.delete_node(node)?,
+                Update::DeleteEdge(edge) => self.delete_node(edge)?,
+            }
+        }
+        Ok(())
+    }
+
     pub fn commit(mut self) -> Result<(), Error> {
+        self.flush()?;
         self.txn.set_root(DB_NODES, self.nodes.db)?;
         self.txn.set_root(DB_EDGES, self.edges.db)?;
         self.txn.set_root(DB_ORIGINS, self.origins.db)?;

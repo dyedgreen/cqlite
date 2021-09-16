@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use planner::QueryPlan;
-use runtime::{Access, Program, Status, Update, VirtualMachine};
+use runtime::{Access, Program, Status, VirtualMachine};
 use std::{collections::HashMap, path::Path};
 use store::{Store, StoreTxn};
 
@@ -41,12 +41,6 @@ pub struct Query<'stmt, 'txn> {
 /// nodes and edges
 pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
-}
-
-/// TODO: A set of changes produced by a
-/// query.
-pub struct ChangeSet<'stmt> {
-    updates: Vec<Update<'stmt>>,
 }
 
 impl Graph {
@@ -94,10 +88,6 @@ impl Graph {
 }
 
 impl<'graph> Txn<'graph> {
-    pub fn apply(&mut self, changes: ChangeSet) -> Result<(), Error> {
-        VirtualMachine::apply_updates(&mut self.0, changes.updates)
-    }
-
     pub fn commit(self) -> Result<(), Error> {
         self.0.commit()
     }
@@ -108,9 +98,10 @@ impl<'graph> Statement<'graph> {
     /// TODO: Read matches
     pub fn query<'stmt, 'txn>(
         &'stmt self,
-        txn: &'txn Txn<'stmt>,
+        txn: &'txn mut Txn<'stmt>,
         parameters: Option<HashMap<String, Property>>,
     ) -> Result<Query<'stmt, 'txn>, Error> {
+        txn.0.flush()?;
         Ok(Query {
             stmt: self,
             vm: VirtualMachine::new(
@@ -124,15 +115,13 @@ impl<'graph> Statement<'graph> {
 
     /// TODO: Have a parameter trait
     /// TODO: Write to the database
-    pub fn execute(
-        &self,
-        txn: &mut Txn,
+    pub fn execute<'stmt, 'txn>(
+        &'stmt self,
+        txn: &'txn mut Txn<'stmt>,
         parameters: Option<HashMap<String, Property>>,
     ) -> Result<(), Error> {
-        let mut query = self.query(&txn, parameters)?;
+        let mut query = self.query(txn, parameters)?;
         while let Some(_) = query.step()? {}
-        let changes = query.changes()?;
-        txn.apply(changes)?;
         Ok(())
     }
 }
@@ -145,12 +134,6 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
             Status::Yield => Ok(Some(Match { query: self })),
             Status::Halt => Ok(None),
         }
-    }
-
-    pub fn changes(self) -> Result<ChangeSet<'stmt>, Error> {
-        Ok(ChangeSet {
-            updates: self.vm.finalize()?,
-        })
     }
 }
 
@@ -199,8 +182,8 @@ mod tests {
         let stmt = graph
             .prepare("MATCH (a) -[e]-> (b) RETURN a, b, e")
             .unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -227,8 +210,8 @@ mod tests {
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]- (b) RETURN a, b, e").unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -256,8 +239,8 @@ mod tests {
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]-> (a) RETURN a, e").unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -282,9 +265,9 @@ mod tests {
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a) -[e]- (a) RETURN a, e").unwrap();
-        let txn = graph.txn().unwrap();
+        let mut txn = graph.txn().unwrap();
 
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -320,8 +303,8 @@ mod tests {
         let stmt = graph
             .prepare("MATCH (a) -[e:KNOWS]-> (b) RETURN a, b, e")
             .unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!("PERSON_A", result.node(0).unwrap().label());
@@ -347,14 +330,14 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                MATCH (a:PERSON) -[:KNOWS]- (b:PERSON)
-                WHERE a.test = 42
-                RETURN a, b
-                ",
+                        MATCH (a:PERSON) -[:KNOWS]- (b:PERSON)
+                        WHERE a.test = 42
+                        RETURN a, b
+                        ",
             )
             .unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!(a.id(), result.node(0).unwrap().id());
@@ -379,13 +362,13 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                MATCH (a:PERSON { test: 'hello world!' }) -[:KNOWS]- (b:PERSON)
-                RETURN a, b
-                ",
+                        MATCH (a:PERSON { test: 'hello world!' }) -[:KNOWS]- (b:PERSON)
+                        RETURN a, b
+                        ",
             )
             .unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!(a.id(), result.node(0).unwrap().id());
@@ -408,14 +391,14 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                MATCH (a:PERSON)
-                WHERE 1 = ID ( a )
-                RETURN a
-                ",
+                        MATCH (a:PERSON)
+                        WHERE 1 = ID ( a )
+                        RETURN a
+                        ",
             )
             .unwrap();
-        let txn = graph.txn().unwrap();
-        let mut matches = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
         assert_eq!(b.id(), result.node(0).unwrap().id());
@@ -449,16 +432,16 @@ mod tests {
         let stmt = graph
             .prepare(
                 "
-                MATCH (a:PERSON)
-                WHERE a.age >= $min_age
-                RETURN a
-                ",
+                        MATCH (a:PERSON)
+                        WHERE a.age >= $min_age
+                        RETURN a
+                        ",
             )
             .unwrap();
-        let txn = graph.txn().unwrap();
+        let mut txn = graph.txn().unwrap();
         let mut matches = stmt
             .query(
-                &txn,
+                &mut txn,
                 Some(
                     vec![("min_age".into(), Property::Integer(18))]
                         .into_iter()
@@ -486,11 +469,11 @@ mod tests {
         stmt.execute(&mut txn, None).unwrap();
         txn.commit().unwrap();
 
-        let txn = graph.txn().unwrap();
         let stmt = graph
             .prepare("MATCH (a:PERSON) WHERE ID(a) = 0 RETURN a")
             .unwrap();
-        let mut query = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut query = stmt.query(&mut txn, None).unwrap();
         let results = query.step().unwrap().unwrap();
         assert_eq!(
             &Property::Integer(42),
@@ -508,8 +491,8 @@ mod tests {
         txn.commit().unwrap();
 
         let stmt = graph.prepare("MATCH (a:PERSON) RETURN a").unwrap();
-        let txn = graph.txn().unwrap();
-        let mut query = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut query = stmt.query(&mut txn, None).unwrap();
         assert_eq!(
             "PERSON",
             query.step().unwrap().unwrap().node(0).unwrap().label()
@@ -521,8 +504,8 @@ mod tests {
         del_stmt.execute(&mut txn, None).unwrap();
         txn.commit().unwrap();
 
-        let txn = graph.txn().unwrap();
-        let mut query = stmt.query(&txn, None).unwrap();
+        let mut txn = graph.txn().unwrap();
+        let mut query = stmt.query(&mut txn, None).unwrap();
         assert!(query.step().unwrap().is_none());
     }
 }

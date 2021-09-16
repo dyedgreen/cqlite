@@ -2,7 +2,7 @@ mod program;
 mod vm;
 
 pub(crate) use program::Program;
-pub(crate) use vm::{Access, Instruction, Status, Update, VirtualMachine};
+pub(crate) use vm::{Access, Instruction, Status, VirtualMachine};
 
 #[cfg(test)]
 mod tests {

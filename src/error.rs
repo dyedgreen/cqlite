@@ -1,6 +1,7 @@
 use bincode::Error as BincodeError;
 use peg::{error::ParseError, str::LineCol};
 use sanakirja::Error as SanakirjaError;
+use std::sync::TryLockError;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -24,6 +25,13 @@ impl From<BincodeError> for Error {
 
 impl From<ParseError<LineCol>> for Error {
     fn from(error: ParseError<LineCol>) -> Self {
+        eprintln!("TODO: {:?}", error);
+        Self::Todo
+    }
+}
+
+impl<T> From<TryLockError<T>> for Error {
+    fn from(error: TryLockError<T>) -> Self {
         eprintln!("TODO: {:?}", error);
         Self::Todo
     }
