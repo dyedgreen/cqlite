@@ -88,6 +88,13 @@ impl<'src> Node<'src> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CreateNode<'src> {
+    pub name: Option<&'src str>,
+    pub label: &'src str,
+    pub properties: Vec<(&'src str, Expression<'src>)>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Left,

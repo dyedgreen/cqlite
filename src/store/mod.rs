@@ -182,8 +182,18 @@ impl<'e> StoreTxn<'e> {
     }
 
     pub fn delete_node(&mut self, node: u64) -> Result<(), Error> {
-        btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
-        Ok(())
+        let has_origin = btree::get(&self.txn, &self.origins, &node, None)?
+            .map(|(k, _)| *k == node)
+            .unwrap_or(false);
+        let has_target = btree::get(&self.txn, &self.targets, &node, None)?
+            .map(|(k, _)| *k == node)
+            .unwrap_or(false);
+        if has_origin || has_target {
+            Err(Error::Todo)
+        } else {
+            btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
+            Ok(())
+        }
     }
 
     pub fn unchecked_create_edge(
@@ -232,7 +242,21 @@ impl<'e> StoreTxn<'e> {
         Ok(())
     }
     pub fn delete_edge(&mut self, edge: u64) -> Result<(), Error> {
-        btree::del(&mut self.txn, &mut self.edges, &edge, None)?;
+        if let Some(edge) = self.load_edge(edge)? {
+            btree::del(
+                &mut self.txn,
+                &mut self.origins,
+                &edge.origin,
+                Some(&edge.id),
+            )?;
+            btree::del(
+                &mut self.txn,
+                &mut self.targets,
+                &edge.target,
+                Some(&edge.id),
+            )?;
+            btree::del(&mut self.txn, &mut self.edges, &edge.id, None)?;
+        }
         Ok(())
     }
 
@@ -330,8 +354,8 @@ mod tests {
         assert!(txn.load_node(node.id()).unwrap().is_some());
         assert!(txn.load_edge(edge.id()).unwrap().is_some());
 
-        txn.delete_node(node.id()).unwrap();
         txn.delete_edge(edge.id()).unwrap();
+        txn.delete_node(node.id()).unwrap();
         txn.commit().unwrap();
 
         let txn = store.txn().unwrap();

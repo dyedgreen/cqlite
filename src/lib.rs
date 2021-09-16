@@ -95,7 +95,6 @@ impl<'graph> Txn<'graph> {
 
 impl<'graph> Statement<'graph> {
     /// TODO: Have a parameter trait
-    /// TODO: Read matches
     pub fn query<'stmt, 'txn>(
         &'stmt self,
         txn: &'txn mut Txn<'stmt>,
@@ -113,7 +112,6 @@ impl<'graph> Statement<'graph> {
     }
 
     /// TODO: Have a parameter trait
-    /// TODO: Write to the database
     pub fn execute<'stmt, 'txn>(
         &'stmt self,
         txn: &'txn mut Txn<'stmt>,
@@ -121,6 +119,7 @@ impl<'graph> Statement<'graph> {
     ) -> Result<(), Error> {
         let mut query = self.query(txn, parameters)?;
         while let Some(_) = query.step()? {}
+        txn.0.flush()?;
         Ok(())
     }
 }
@@ -487,5 +486,20 @@ mod tests {
         let mut txn = graph.txn().unwrap();
         let mut query = stmt.query(&mut txn, None).unwrap();
         assert!(query.step().unwrap().is_none());
+    }
+
+    #[test]
+    fn run_bad_delete() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        let node = txn.create_node("PERSON", None).unwrap().id;
+        txn.create_edge("TEST", node, node, None).unwrap();
+        txn.commit().unwrap();
+
+        let del_stmt = graph.prepare("MATCH (a:PERSON) DELETE a").unwrap();
+        let mut txn = graph.mut_txn().unwrap();
+        assert!(del_stmt.execute(&mut txn, None).is_err());
     }
 }
