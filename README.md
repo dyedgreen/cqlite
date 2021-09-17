@@ -2,6 +2,40 @@
 
 An embedded graph database implemented with Rust. Currently WIP/ DRAFT ...
 
+```rust
+use gqlite::Graph;
+
+let graph = Graph::open("database.graph")?;
+
+let create_stmt = graph.prepare(
+  "
+  CREATE (a:PERSON { name: 'Peter Parker' })
+  CREATE (b:PERSON { name: 'Clark Kent' })
+  CREATE (a) -[:KNOWS]-> (b)
+  RETURN ID(a), ID(b)
+  "
+)?;
+let mut txn = graph.mut_txn()?;
+let query = create_stmt.query(&mut txn, None)?;
+let vals = query.step()?;
+let id_a: u64 = vals.get(0)?;
+let id_b: u64 = vals.get(1)?;
+txn.commit()?;
+
+println!("ID(a) = {}, ID(b) = {}", id_a, id_b);
+
+let stmt = grapg.prepare(
+  "
+  MATCH (p:PERSON) <-[:KNOWS]- (:PERSON)
+  RETURN p.name
+  "
+)?;
+let mut txn = graph.txn()?;
+let query = stmt.query(&mut txn, None)?;
+let vals = query.step()?;
+assert_eq!("Clark Kent".to_string(), vals.get(0)?);
+```
+
 
 ## Architecture Overview
 
@@ -20,23 +54,10 @@ simple byte-code interpreter.
 
 ### Byte-Code Interpreter :: `src/runtime`
 
-Defines a simple byte code (`Instructions`) and can execute those against a given
+Defines a simple 'byte' code (`Instructions`) and can execute those against a given
 database.
 
 ### Storage Backend :: `src/store`
 
 Uses a disc-backed `btree` to provide basic storage, iteration and lockup for nodes and
 edges.
-
-## TODO List
-
-- [x] match either left / right
-- [ ] match edge/ node kinds ...
-- [ ] WHERE clauses
-- [ ] test mutli match
-- [ ] CREATE / DELETE / SET clauses -> figure out how to handle transactions ...
-
-## Crate list (for later reference)
-- https://crates.io/crates/thiserror
-- https://docs.rs/smallvec/1.6.1/smallvec/index.html
-- https://docs.rs/cranelift-jit/0.76.0/cranelift_jit/index.html
