@@ -156,6 +156,29 @@ pub(crate) enum Instruction {
         rhs: usize,
     },
 
+    /// Queue an update that creates a new node with
+    /// the given label and the set of properties
+    /// assembled using the `Vec` of accesses.
+    ///
+    /// The created node is also pushed to the node
+    /// stack.
+    CreateNode {
+        label: String,
+        properties: Vec<(String, usize)>,
+    },
+    /// Queue an update that creates a new edge with
+    /// the given label, origin, target, and the set
+    /// of properties assembled using the `Vec` of
+    /// accesses.
+    ///
+    /// The created node is also pushed to the node
+    /// stack.
+    CreateEdge {
+        label: String,
+        origin: usize,
+        target: usize,
+        properties: Vec<(String, usize)>,
+    },
     /// Queue an update that sets property `key` of
     /// `node` to `access[value]`.
     SetNodeProperty {
@@ -446,6 +469,45 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
 
+                Instruction::CreateNode { label, properties } => {
+                    let node = Node {
+                        id: self.txn.id_seq(),
+                        label: label.clone(),
+                        properties: properties
+                            .iter()
+                            .map(|(key, access)| -> Result<_, Error> {
+                                Ok((key.clone(), self.access_property(*access)?.to_owned()))
+                            })
+                            .collect::<Result<_, Error>>()?,
+                    };
+                    self.txn.queue_update(Update::CreateNode(node.clone()))?;
+                    self.node_stack.push(node);
+                    self.current_inst += 1;
+                }
+                Instruction::CreateEdge {
+                    label,
+                    origin,
+                    target,
+                    properties,
+                } => {
+                    let origin = self.node_stack[*origin].id();
+                    let target = self.node_stack[*target].id();
+                    let edge = Edge {
+                        id: self.txn.id_seq(),
+                        label: label.clone(),
+                        origin,
+                        target,
+                        properties: properties
+                            .iter()
+                            .map(|(key, access)| -> Result<_, Error> {
+                                Ok((key.clone(), self.access_property(*access)?.to_owned()))
+                            })
+                            .collect::<Result<_, Error>>()?,
+                    };
+                    self.txn.queue_update(Update::CreateEdge(edge.clone()))?;
+                    self.edge_stack.push(edge);
+                    self.current_inst += 1;
+                }
                 Instruction::SetNodeProperty { node, key, value } => {
                     let node = &self.node_stack[*node];
                     let value = self.access_property(*value)?.to_owned();

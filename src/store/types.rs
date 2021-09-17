@@ -203,6 +203,18 @@ macro_rules! try_from {
                 }
             }
         }
+
+        impl From<$type> for Property {
+            fn from(value: $type) -> Self {
+                Property::$variant(value)
+            }
+        }
+
+        impl From<Option<$type>> for Property {
+            fn from(value: Option<$type>) -> Self {
+                value.map(|v| v.into()).unwrap_or(Property::Null)
+            }
+        }
     };
 }
 

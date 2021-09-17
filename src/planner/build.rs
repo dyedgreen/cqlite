@@ -366,6 +366,52 @@ impl<'src> BuildEnv<'src> {
         Ok(steps)
     }
 
+    fn build_create_update(
+        &mut self,
+        clause: &ast::CreateClause<'src>,
+    ) -> Result<UpdateStep, Error> {
+        match clause {
+            ast::CreateClause::CreateNode {
+                name,
+                label,
+                properties,
+            } => Ok(UpdateStep::CreateNode {
+                name: name
+                    .map(|n| self.create_node(n))
+                    .transpose()?
+                    .unwrap_or_else(|| self.next_name()),
+                label: label.to_string(),
+                properties: properties
+                    .iter()
+                    .map(|(key, expr)| -> Result<_, Error> {
+                        Ok((key.to_string(), self.build_load_property(expr)?))
+                    })
+                    .collect::<Result<_, Error>>()?,
+            }),
+            ast::CreateClause::CreateEdge {
+                name,
+                label,
+                origin,
+                target,
+                properties,
+            } => Ok(UpdateStep::CreateEdge {
+                name: name
+                    .map(|n| self.create_edge(n))
+                    .transpose()?
+                    .unwrap_or_else(|| self.next_name()),
+                label: label.to_string(),
+                origin: self.get_node(origin)?.ok_or(Error::Todo)?,
+                target: self.get_node(target)?.ok_or(Error::Todo)?,
+                properties: properties
+                    .iter()
+                    .map(|(key, expr)| -> Result<_, Error> {
+                        Ok((key.to_string(), self.build_load_property(expr)?))
+                    })
+                    .collect::<Result<_, Error>>()?,
+            }),
+        }
+    }
+
     fn build_set_update(&mut self, clause: &ast::SetClause<'src>) -> Result<UpdateStep, Error> {
         match self.names.get(clause.name) {
             Some(NamedEntity::Node(node)) => Ok(UpdateStep::SetNodeProperty {
@@ -405,6 +451,9 @@ impl QueryPlan {
             steps.push(MatchStep::Filter(env.build_filter(condition)?));
         }
 
+        for clause in &query.create_clauses {
+            updates.push(env.build_create_update(clause)?);
+        }
         for clause in &query.set_clauses {
             updates.push(env.build_set_update(clause)?);
         }

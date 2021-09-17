@@ -92,6 +92,8 @@ impl CompileEnv {
                 | LoadOtherNode { .. }
                 | PopNode
                 | PopEdge
+                | CreateNode { .. }
+                | CreateEdge { .. }
                 | SetNodeProperty { .. }
                 | SetEdgeProperty { .. }
                 | DeleteNode { .. }
@@ -265,6 +267,97 @@ impl CompileEnv {
         Ok(())
     }
 
+    fn compile_update(&mut self, plan: &QueryPlan, updates: &[UpdateStep]) -> Result<(), Error> {
+        if let Some(update) = updates.get(0) {
+            match update {
+                UpdateStep::CreateNode {
+                    name,
+                    label,
+                    properties,
+                } => {
+                    let create_node = Instruction::CreateNode {
+                        label: label.to_string(),
+                        properties: properties
+                            .iter()
+                            .map(|(key, load)| -> Result<_, Error> {
+                                Ok((key.to_string(), self.compile_access(load)?))
+                            })
+                            .collect::<Result<_, Error>>()?,
+                    };
+                    self.instructions.push(create_node);
+                    self.push_node(*name);
+                    self.compile_update(plan, &updates[1..])?;
+                    self.pop_node(*name);
+                    self.instructions.push(Instruction::PopNode);
+                    Ok(())
+                }
+                UpdateStep::CreateEdge {
+                    name,
+                    label,
+                    origin,
+                    target,
+                    properties,
+                } => {
+                    let create_edge = Instruction::CreateEdge {
+                        label: label.to_string(),
+                        origin: self.get_stack_idx(*origin)?,
+                        target: self.get_stack_idx(*target)?,
+                        properties: properties
+                            .iter()
+                            .map(|(key, load)| -> Result<_, Error> {
+                                Ok((key.to_string(), self.compile_access(load)?))
+                            })
+                            .collect::<Result<_, Error>>()?,
+                    };
+                    self.instructions.push(create_edge);
+                    self.push_edge(*name);
+                    self.compile_update(plan, &updates[1..])?;
+                    self.pop_edge(*name);
+                    self.instructions.push(Instruction::PopEdge);
+                    Ok(())
+                }
+                UpdateStep::SetNodeProperty { node, key, value } => {
+                    let node = self.get_stack_idx(*node)?;
+                    let value = self.compile_access(value)?;
+                    self.instructions.push(Instruction::SetNodeProperty {
+                        node,
+                        key: key.to_string(),
+                        value,
+                    });
+                    self.compile_update(plan, &updates[1..])
+                }
+                UpdateStep::SetEdgeProperty { edge, key, value } => {
+                    let edge = self.get_stack_idx(*edge)?;
+                    let value = self.compile_access(value)?;
+                    self.instructions.push(Instruction::SetEdgeProperty {
+                        edge,
+                        key: key.to_string(),
+                        value,
+                    });
+                    self.compile_update(plan, &updates[1..])
+                }
+                UpdateStep::DeleteNode { node } => {
+                    let node = self.get_stack_idx(*node)?;
+                    self.instructions.push(Instruction::DeleteNode { node });
+                    self.compile_update(plan, &updates[1..])
+                }
+                UpdateStep::DeleteEdge { edge } => {
+                    let edge = self.get_stack_idx(*edge)?;
+                    self.instructions.push(Instruction::DeleteEdge { edge });
+                    self.compile_update(plan, &updates[1..])
+                }
+            }
+        } else {
+            self.instructions.push(Instruction::Yield);
+            if self.returns.is_empty() {
+                for load in &plan.returns {
+                    self.returns.push(self.compile_access_raw(load)?);
+                }
+            }
+            Ok(())
+        }
+    }
+
     fn compile_step(&mut self, plan: &QueryPlan, steps: &[MatchStep]) -> Result<(), Error> {
         if let Some(step) = steps.get(0) {
             let start = self.instructions.len();
@@ -371,44 +464,7 @@ impl CompileEnv {
             }
             Ok(())
         } else {
-            for update in &plan.updates {
-                match update {
-                    UpdateStep::SetNodeProperty { node, key, value } => {
-                        let node = self.get_stack_idx(*node)?;
-                        let value = self.compile_access(value)?;
-                        self.instructions.push(Instruction::SetNodeProperty {
-                            node,
-                            key: key.to_string(),
-                            value,
-                        });
-                    }
-                    UpdateStep::SetEdgeProperty { edge, key, value } => {
-                        let edge = self.get_stack_idx(*edge)?;
-                        let value = self.compile_access(value)?;
-                        self.instructions.push(Instruction::SetEdgeProperty {
-                            edge,
-                            key: key.to_string(),
-                            value,
-                        });
-                    }
-                    UpdateStep::DeleteNode { node } => {
-                        let node = self.get_stack_idx(*node)?;
-                        self.instructions.push(Instruction::DeleteNode { node });
-                    }
-                    UpdateStep::DeleteEdge { edge } => {
-                        let edge = self.get_stack_idx(*edge)?;
-                        self.instructions.push(Instruction::DeleteEdge { edge });
-                    }
-                }
-            }
-            self.instructions.push(Instruction::Yield);
-
-            if self.returns.is_empty() {
-                for load in &plan.returns {
-                    self.returns.push(self.compile_access_raw(load)?);
-                }
-            }
-            Ok(())
+            self.compile_update(plan, &plan.updates)
         }
     }
 }

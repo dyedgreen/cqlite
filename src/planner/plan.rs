@@ -79,6 +79,18 @@ pub(crate) enum LoadProperty {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum UpdateStep {
+    CreateNode {
+        name: usize,
+        label: String,
+        properties: Vec<(String, LoadProperty)>,
+    },
+    CreateEdge {
+        name: usize,
+        label: String,
+        origin: usize,
+        target: usize,
+        properties: Vec<(String, LoadProperty)>,
+    },
     SetNodeProperty {
         node: usize,
         key: String,
@@ -101,12 +113,33 @@ impl PartialOrd for UpdateStep {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         use UpdateStep::*;
         match (self, other) {
+            (CreateNode { .. }, CreateNode { .. }) => Some(Ordering::Equal),
+            (CreateEdge { .. }, CreateEdge { .. }) => Some(Ordering::Equal),
             (
                 SetNodeProperty { .. } | SetEdgeProperty { .. },
                 SetNodeProperty { .. } | SetEdgeProperty { .. },
             ) => Some(Ordering::Equal),
             (DeleteNode { .. }, DeleteNode { .. }) => Some(Ordering::Equal),
             (DeleteEdge { .. }, DeleteEdge { .. }) => Some(Ordering::Equal),
+
+            (CreateNode { .. }, CreateEdge { .. }) => Some(Ordering::Less),
+            (CreateEdge { .. }, CreateNode { .. }) => Some(Ordering::Greater),
+
+            (
+                CreateNode { .. } | CreateEdge { .. },
+                SetNodeProperty { .. }
+                | SetEdgeProperty { .. }
+                | DeleteNode { .. }
+                | DeleteEdge { .. },
+            ) => Some(Ordering::Less),
+            (
+                SetNodeProperty { .. }
+                | SetEdgeProperty { .. }
+                | DeleteNode { .. }
+                | DeleteEdge { .. },
+                CreateNode { .. } | CreateEdge { .. },
+            ) => Some(Ordering::Greater),
+
             (
                 SetNodeProperty { .. } | SetEdgeProperty { .. },
                 DeleteNode { .. } | DeleteEdge { .. },
@@ -115,8 +148,9 @@ impl PartialOrd for UpdateStep {
                 DeleteNode { .. } | DeleteEdge { .. },
                 SetNodeProperty { .. } | SetEdgeProperty { .. },
             ) => Some(Ordering::Greater),
-            (DeleteNode { .. }, DeleteEdge { .. }) => Some(Ordering::Greater),
+
             (DeleteEdge { .. }, DeleteNode { .. }) => Some(Ordering::Less),
+            (DeleteNode { .. }, DeleteEdge { .. }) => Some(Ordering::Greater),
         }
     }
 }

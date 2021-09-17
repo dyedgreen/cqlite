@@ -2,6 +2,7 @@
 pub struct Query<'src> {
     pub match_clauses: Vec<MatchClause<'src>>,
     pub where_clauses: Vec<Condition<'src>>,
+    pub create_clauses: Vec<CreateClause<'src>>,
     pub set_clauses: Vec<SetClause<'src>>,
     pub delete_clauses: Vec<&'src str>,
     pub return_clause: Vec<Expression<'src>>,
@@ -18,6 +19,22 @@ pub struct SetClause<'src> {
     pub name: &'src str,
     pub key: &'src str,
     pub value: Expression<'src>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CreateClause<'src> {
+    CreateNode {
+        name: Option<&'src str>,
+        label: &'src str,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    },
+    CreateEdge {
+        name: Option<&'src str>,
+        label: &'src str,
+        origin: &'src str,
+        target: &'src str,
+        properties: Vec<(&'src str, Expression<'src>)>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,13 +103,6 @@ impl<'src> Node<'src> {
             properties,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct CreateNode<'src> {
-    pub name: Option<&'src str>,
-    pub label: &'src str,
-    pub properties: Vec<(&'src str, Expression<'src>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

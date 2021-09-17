@@ -9,6 +9,7 @@ mod tests {
     use super::*;
     use crate::planner::{MatchStep, QueryPlan};
     use crate::store::Store;
+    use crate::store::{Edge, Node};
     use std::collections::HashMap;
     use vm::*;
 
@@ -16,10 +17,36 @@ mod tests {
     fn test_basic_match_script() {
         let store = Store::open_anon().unwrap();
         let mut txn = store.mut_txn().unwrap();
-        let a = txn.create_node("PERSON_A", None).unwrap().id;
-        let b = txn.create_node("PERSON_B", None).unwrap().id;
-        txn.create_edge("KNOWS", a, b, None).unwrap();
-        txn.create_edge("KNOWS", b, a, None).unwrap();
+        let node1 = txn
+            .unchecked_create_node(Node {
+                id: txn.id_seq(),
+                label: "PERSON_A".to_string(),
+                properties: Default::default(),
+            })
+            .unwrap();
+        let node2 = txn
+            .unchecked_create_node(Node {
+                id: txn.id_seq(),
+                label: "PERSON_B".to_string(),
+                properties: Default::default(),
+            })
+            .unwrap();
+        txn.unchecked_create_edge(Edge {
+            id: txn.id_seq(),
+            label: "KNOWS".to_string(),
+            origin: node1.id(),
+            target: node2.id(),
+            properties: Default::default(),
+        })
+        .unwrap();
+        txn.unchecked_create_edge(Edge {
+            id: txn.id_seq(),
+            label: "KNOWS".to_string(),
+            origin: node2.id(),
+            target: node1.id(),
+            properties: Default::default(),
+        })
+        .unwrap();
         txn.commit().unwrap();
 
         let instructions = {
