@@ -170,7 +170,11 @@ impl<'e> StoreTxn<'e> {
 
     pub fn update_node(&mut self, node: u64, key: &str, value: Property) -> Result<(), Error> {
         let mut node = self.load_node(node)?.ok_or(Error::Todo)?;
-        node.properties.insert(key.to_string(), value);
+        if value == Property::Null {
+            node.properties.remove(key);
+        } else {
+            node.properties.insert(key.to_string(), value);
+        }
         let bytes = bincode::serialize(&node)?;
         btree::del(&mut self.txn, &mut self.nodes, &node.id, None)?;
         btree::put(&mut self.txn, &mut self.nodes, &node.id, bytes.as_ref())?;
@@ -202,7 +206,11 @@ impl<'e> StoreTxn<'e> {
 
     pub fn update_edge(&mut self, edge: u64, key: &str, value: Property) -> Result<(), Error> {
         let mut edge = self.load_edge(edge)?.ok_or(Error::Todo)?;
-        edge.properties.insert(key.to_string(), value);
+        if value == Property::Null {
+            edge.properties.remove(key);
+        } else {
+            edge.properties.insert(key.to_string(), value);
+        }
         let bytes = bincode::serialize(&edge)?;
         btree::del(&mut self.txn, &mut self.edges, &edge.id, None)?;
         btree::put(&mut self.txn, &mut self.edges, &edge.id, bytes.as_ref())?;
