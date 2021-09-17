@@ -13,7 +13,7 @@ pub(crate) mod runtime;
 pub(crate) mod store;
 
 pub use error::Error;
-pub use store::{Property, PropertyRef};
+pub use store::Property;
 
 /// TODO: A handle to the database
 pub struct Graph {
@@ -137,7 +137,7 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 
 impl<'query> Match<'query> {
     /// TODO: Should we not return a property ref but accept a 'FromProperty'?
-    pub fn get(&self, idx: usize) -> Result<PropertyRef, Error> {
+    pub fn get(&self, idx: usize) -> Result<Property, Error> {
         self.query.vm.access_return(idx)
     }
 }
@@ -165,14 +165,14 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
-        assert_eq!(PropertyRef::Id(eab), result.get(2).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(b), result.get(1).unwrap());
+        assert_eq!(Property::Id(eab), result.get(2).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(a), result.get(1).unwrap());
-        assert_eq!(PropertyRef::Id(eba), result.get(2).unwrap());
+        assert_eq!(Property::Id(b), result.get(0).unwrap());
+        assert_eq!(Property::Id(a), result.get(1).unwrap());
+        assert_eq!(Property::Id(eba), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -195,14 +195,14 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
-        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(b), result.get(1).unwrap());
+        assert_eq!(Property::Id(e), result.get(2).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(a), result.get(1).unwrap());
-        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
+        assert_eq!(Property::Id(b), result.get(0).unwrap());
+        assert_eq!(Property::Id(a), result.get(1).unwrap());
+        assert_eq!(Property::Id(e), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -226,12 +226,12 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(e1), result.get(1).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
+        assert_eq!(Property::Id(b), result.get(0).unwrap());
+        assert_eq!(Property::Id(e2), result.get(1).unwrap());
     }
 
     #[test]
@@ -254,18 +254,18 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(e1), result.get(1).unwrap());
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e1), result.get(1).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(e1), result.get(1).unwrap());
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
+        assert_eq!(Property::Id(b), result.get(0).unwrap());
+        assert_eq!(Property::Id(e2), result.get(1).unwrap());
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(b), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(e2), result.get(1).unwrap());
+        assert_eq!(Property::Id(b), result.get(0).unwrap());
+        assert_eq!(Property::Id(e2), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -289,9 +289,9 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(b), result.get(1).unwrap());
-        assert_eq!(PropertyRef::Id(e), result.get(2).unwrap());
+        assert_eq!(Property::Id(a), result.get(0).unwrap());
+        assert_eq!(Property::Id(b), result.get(1).unwrap());
+        assert_eq!(Property::Id(e), result.get(2).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -322,8 +322,8 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(b.id()), result.get(1).unwrap());
+        assert_eq!(Property::Id(a.id()), result.get(0).unwrap());
+        assert_eq!(Property::Id(b.id()), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -353,8 +353,8 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
-        assert_eq!(PropertyRef::Id(b.id()), result.get(1).unwrap());
+        assert_eq!(Property::Id(a.id()), result.get(0).unwrap());
+        assert_eq!(Property::Id(b.id()), result.get(1).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -383,7 +383,7 @@ mod tests {
         let mut matches = stmt.query(&mut txn, None).unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(1), result.get(0).unwrap());
+        assert_eq!(Property::Id(1), result.get(0).unwrap());
 
         assert!(matches.step().unwrap().is_none());
     }
@@ -433,7 +433,7 @@ mod tests {
             .unwrap();
 
         let result = matches.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Id(a.id()), result.get(0).unwrap());
+        assert_eq!(Property::Id(a.id()), result.get(0).unwrap());
         assert!(matches.step().unwrap().is_none());
     }
 
@@ -457,7 +457,28 @@ mod tests {
         let mut txn = graph.txn().unwrap();
         let mut query = stmt.query(&mut txn, None).unwrap();
         let results = query.step().unwrap().unwrap();
-        assert_eq!(PropertyRef::Integer(42), results.get(0).unwrap());
+        assert_eq!(Property::Integer(42), results.get(0).unwrap());
+    }
+
+    #[test]
+    fn return_from_set() {
+        let graph = Graph::open_anon().unwrap();
+
+        // TODO
+        let mut txn = graph.store.mut_txn().unwrap();
+        txn.create_node("PERSON", None).unwrap();
+        txn.commit().unwrap();
+
+        let stmt = graph
+            .prepare("MATCH (a:PERSON) SET a.answer = 42 RETURN ID(a), a.answer")
+            .unwrap();
+        let mut txn = graph.mut_txn().unwrap();
+        let mut query = stmt.query(&mut txn, None).unwrap();
+        let results = query.step().unwrap().unwrap();
+        assert_eq!(Property::Id(0), results.get(0).unwrap());
+        assert_eq!(Property::Integer(42), results.get(1).unwrap());
+        assert!(query.step().unwrap().is_none());
+        txn.commit().unwrap();
     }
 
     #[test]
@@ -473,7 +494,7 @@ mod tests {
         let mut txn = graph.txn().unwrap();
         let mut query = stmt.query(&mut txn, None).unwrap();
         assert_eq!(
-            PropertyRef::Id(0),
+            Property::Id(0),
             query.step().unwrap().unwrap().get(0).unwrap(),
         );
         assert!(query.step().unwrap().is_none());

@@ -1,6 +1,6 @@
 use super::Program;
-use crate::store::{Edge, EdgeIter, Node, NodeIter, StoreTxn, Update};
-use crate::{Error, Property, PropertyRef};
+use crate::store::{Edge, EdgeIter, Node, NodeIter, Property, PropertyRef, StoreTxn, Update};
+use crate::Error;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -218,8 +218,8 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    fn access_raw<'p>(&'p self, access: &'p Access) -> Result<PropertyRef<'p>, Error> {
-        match access {
+    pub fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
+        match &self.accesses[access] {
             Access::Constant(val) => Ok(val.as_ref()),
             Access::NodeId(node) => Ok(PropertyRef::Id(self.node_stack[*node].id())),
             Access::EdgeId(edge) => Ok(PropertyRef::Id(self.edge_stack[*edge].id())),
@@ -233,12 +233,31 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    pub fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
-        self.access_raw(&self.accesses[access])
-    }
-
-    pub fn access_return(&self, access: usize) -> Result<PropertyRef, Error> {
-        self.access_raw(&self.returns[access])
+    pub fn access_return(&self, access: usize) -> Result<Property, Error> {
+        match &self.returns[access] {
+            Access::Constant(val) => Ok(val.clone()),
+            Access::NodeId(node) => Ok(Property::Id(self.node_stack[*node].id())),
+            Access::EdgeId(edge) => Ok(Property::Id(self.edge_stack[*edge].id())),
+            Access::NodeProperty(node, key) => {
+                let node = &self.node_stack[*node];
+                Ok(self
+                    .txn
+                    .get_updated_property(node.id(), key)?
+                    .unwrap_or_else(|| node.property(key).clone()))
+            }
+            Access::EdgeProperty(edge, key) => {
+                let edge = &self.edge_stack[*edge];
+                Ok(self
+                    .txn
+                    .get_updated_property(edge.id(), key)?
+                    .unwrap_or_else(|| edge.property(key).clone()))
+            }
+            Access::Parameter(name) => Ok(self
+                .parameters
+                .get(name)
+                .map(Clone::clone)
+                .unwrap_or(Property::Null)),
+        }
     }
 
     /// Docs: TODO

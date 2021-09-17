@@ -392,32 +392,7 @@ impl<'src> BuildEnv<'src> {
 }
 
 impl QueryPlan {
-    fn validate_query(query: &ast::Query) -> Result<(), Error> {
-        if query.match_clauses.is_empty() && !query.where_clauses.is_empty() {
-            // need matches to apply where (TODO: just let this bomb if names
-            // are missing?)
-            return Err(Error::Todo);
-        }
-
-        if query.match_clauses.is_empty() && !query.return_clause.is_empty() {
-            // a return clause needs a match to return from (also just let this
-            // bomb if names are missing?)
-            return Err(Error::Todo);
-        }
-
-        // We don't support returning updated data (yet ..?)
-        // TODO: We *should* support this!
-        let has_update = !query.set_clauses.is_empty() || !query.delete_clauses.is_empty();
-        if has_update && !query.return_clause.is_empty() {
-            return Err(Error::Todo);
-        }
-
-        Ok(())
-    }
-
     pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
-        Self::validate_query(query)?;
-
         let mut env = BuildEnv::new();
         let mut steps = vec![];
         let mut updates = vec![];

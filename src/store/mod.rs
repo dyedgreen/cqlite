@@ -241,6 +241,7 @@ impl<'e> StoreTxn<'e> {
         btree::put(&mut self.txn, &mut self.edges, &edge.id, bytes.as_ref())?;
         Ok(())
     }
+
     pub fn delete_edge(&mut self, edge: u64) -> Result<(), Error> {
         if let Some(edge) = self.load_edge(edge)? {
             btree::del(
@@ -267,6 +268,36 @@ impl<'e> StoreTxn<'e> {
         } else {
             Err(Error::Todo)
         }
+    }
+
+    pub fn get_updated_property(
+        &self,
+        node_or_edge_id: u64,
+        property: &str,
+    ) -> Result<Option<Property>, Error> {
+        Ok(self
+            .updates
+            .try_read()?
+            .iter()
+            .rev()
+            .find_map(|update| match update {
+                Update::SetNodeProperty(node, key, value) => {
+                    if *node == node_or_edge_id && key == property {
+                        Some(value.clone())
+                    } else {
+                        None
+                    }
+                }
+                Update::SetEdgeProperty(edge, key, value) => {
+                    if *edge == node_or_edge_id && key == property {
+                        Some(value.clone())
+                    } else {
+                        None
+                    }
+                }
+                Update::DeleteNode(_) => None,
+                Update::DeleteEdge(_) => None,
+            }))
     }
 
     pub fn flush(&mut self) -> Result<(), Error> {

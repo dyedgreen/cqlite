@@ -1,4 +1,4 @@
-use gqlite::{Graph, PropertyRef};
+use gqlite::{Graph, Property};
 
 #[test]
 fn query_a_to_b() {
@@ -12,14 +12,14 @@ fn query_a_to_b() {
     let mut matches = stmt.query(&mut txn, None).unwrap();
 
     let result = matches.step().unwrap().unwrap();
-    assert_eq!(PropertyRef::Id(0), result.get(0).unwrap());
-    assert_eq!(PropertyRef::Id(1), result.get(1).unwrap());
-    assert_eq!(PropertyRef::Id(2), result.get(2).unwrap());
+    assert_eq!(Property::Id(0), result.get(0).unwrap());
+    assert_eq!(Property::Id(1), result.get(1).unwrap());
+    assert_eq!(Property::Id(2), result.get(2).unwrap());
 
     let result = matches.step().unwrap().unwrap();
-    assert_eq!(PropertyRef::Id(1), result.get(0).unwrap());
-    assert_eq!(PropertyRef::Id(0), result.get(1).unwrap());
-    assert_eq!(PropertyRef::Id(3), result.get(2).unwrap());
+    assert_eq!(Property::Id(1), result.get(0).unwrap());
+    assert_eq!(Property::Id(0), result.get(1).unwrap());
+    assert_eq!(Property::Id(3), result.get(2).unwrap());
 
     assert!(matches.step().unwrap().is_none());
 }
@@ -36,9 +36,9 @@ fn query_a_to_b_with_label() {
     let mut matches = stmt.query(&mut txn, None).unwrap();
 
     let result = matches.step().unwrap().unwrap();
-    assert_eq!(PropertyRef::Id(1), result.get(0).unwrap());
-    assert_eq!(PropertyRef::Id(0), result.get(1).unwrap());
-    assert_eq!(PropertyRef::Id(3), result.get(2).unwrap());
+    assert_eq!(Property::Id(1), result.get(0).unwrap());
+    assert_eq!(Property::Id(0), result.get(1).unwrap());
+    assert_eq!(Property::Id(3), result.get(2).unwrap());
 
     assert!(matches.step().unwrap().is_none());
 }

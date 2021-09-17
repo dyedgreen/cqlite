@@ -109,7 +109,7 @@ impl Edge {
 }
 
 impl Property {
-    pub fn as_ref(&self) -> PropertyRef {
+    pub(crate) fn as_ref(&self) -> PropertyRef {
         match self {
             Property::Id(id) => PropertyRef::Id(*id),
             Property::Integer(num) => PropertyRef::Integer(*num),
@@ -123,7 +123,7 @@ impl Property {
 }
 
 impl<'prop> PropertyRef<'prop> {
-    pub fn to_owned(&self) -> Property {
+    pub(crate) fn to_owned(&self) -> Property {
         match self {
             PropertyRef::Id(id) => Property::Id(*id),
             PropertyRef::Integer(num) => Property::Integer(*num),
