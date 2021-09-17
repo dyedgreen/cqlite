@@ -1,6 +1,7 @@
 use bincode::Error as BincodeError;
 use peg::{error::ParseError, str::LineCol};
 use sanakirja::Error as SanakirjaError;
+use std::convert::Infallible;
 use std::sync::TryLockError;
 
 #[derive(Debug, PartialEq)]
@@ -20,6 +21,12 @@ impl From<BincodeError> for Error {
     fn from(error: BincodeError) -> Self {
         eprintln!("TODO: {:?}", error);
         Self::Todo
+    }
+}
+
+impl From<Infallible> for Error {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
     }
 }
 

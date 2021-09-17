@@ -8,13 +8,6 @@ pub(crate) enum DynTxn<E: Borrow<Env>> {
 }
 
 impl<E: Borrow<Env>> DynTxn<E> {
-    pub fn root(&self, n: usize) -> Option<u64> {
-        match self {
-            DynTxn::Txn(txn) => Some(txn.root(n)),
-            DynTxn::MutTxn(txn) => txn.root(n),
-        }
-    }
-
     pub fn set_root(&mut self, n: usize, value: u64) -> Result<(), Error> {
         match self {
             DynTxn::Txn(_) => Err(Error::Todo),

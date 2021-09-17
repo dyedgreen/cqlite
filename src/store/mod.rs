@@ -67,6 +67,24 @@ impl Store {
         Ok(store)
     }
 
+    pub fn txn(&self) -> Result<StoreTxn, Error> {
+        let txn = Env::txn_begin(&self.env)?;
+        let id_seq = AtomicU64::new(txn.root(ID_SQUENCE));
+        let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
+        let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
+        let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Todo)?;
+        let targets = txn.root_db(DB_TARGETS).ok_or(Error::Todo)?;
+        Ok(StoreTxn {
+            txn: DynTxn::Txn(txn),
+            id_seq,
+            updates: RwLock::new(Vec::new()),
+            nodes,
+            edges,
+            origins,
+            targets,
+        })
+    }
+
     pub fn mut_txn(&self) -> Result<StoreTxn, Error> {
         let mut txn = Env::mut_txn_begin(&self.env)?;
         let id_seq = AtomicU64::new(txn.root(ID_SQUENCE).unwrap_or(0));
@@ -77,23 +95,6 @@ impl Store {
         Ok(StoreTxn {
             txn: DynTxn::MutTxn(txn),
             id_seq,
-            updates: RwLock::new(Vec::new()),
-            nodes,
-            edges,
-            origins,
-            targets,
-        })
-    }
-
-    pub fn txn(&self) -> Result<StoreTxn, Error> {
-        let txn = Env::txn_begin(&self.env)?;
-        let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
-        let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
-        let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Todo)?;
-        let targets = txn.root_db(DB_TARGETS).ok_or(Error::Todo)?;
-        Ok(StoreTxn {
-            txn: DynTxn::Txn(txn),
-            id_seq: AtomicU64::new(0),
             updates: RwLock::new(Vec::new()),
             nodes,
             edges,
@@ -289,7 +290,7 @@ impl<'e> StoreTxn<'e> {
                 Update::SetNodeProperty(node, key, value) => self.update_node(node, &key, value)?,
                 Update::SetEdgeProperty(edge, key, value) => self.update_edge(edge, &key, value)?,
                 Update::DeleteNode(node) => self.delete_node(node)?,
-                Update::DeleteEdge(edge) => self.delete_node(edge)?,
+                Update::DeleteEdge(edge) => self.delete_edge(edge)?,
             }
         }
         Ok(())

@@ -1,9 +1,6 @@
-// TODO: Delete !
-#![allow(dead_code)]
-
 use planner::QueryPlan;
 use runtime::{Program, Status, VirtualMachine};
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, convert::TryInto, path::Path};
 use store::{Store, StoreTxn};
 
 pub(crate) mod error;
@@ -20,13 +17,13 @@ pub struct Graph {
     store: Store,
 }
 
-/// TODO: Handle read/ write transactions in VM ...
-/// either with generics or with an enum (?)
+/// TODO: A read or read/ write transaction
+/// within the database
 pub struct Txn<'graph>(StoreTxn<'graph>);
 
 /// TODO: A prepared statement
 pub struct Statement<'graph> {
-    graph: &'graph Graph,
+    _graph: &'graph Graph,
     program: Program,
 }
 
@@ -60,7 +57,7 @@ impl Graph {
         // TODO
         // plan.optimize();
         Ok(Statement {
-            graph: self,
+            _graph: self,
             program: Program::new(&plan)?,
         })
     }
@@ -113,18 +110,29 @@ impl<'graph> Statement<'graph> {
 
 impl<'stmt, 'txn> Query<'stmt, 'txn> {
     #[inline]
-    pub fn step(&mut self) -> Result<Option<Match>, Error> {
-        // TODO: If a query has no return clause, skip yields ...
-        match self.vm.run()? {
-            Status::Yield => Ok(Some(Match { query: self })),
-            Status::Halt => Ok(None),
+    pub fn step<'query>(&'query mut self) -> Result<Option<Match<'query>>, Error> {
+        if self.stmt.program.returns.is_empty() {
+            loop {
+                match self.vm.run()? {
+                    Status::Yield => continue,
+                    Status::Halt => break Ok(None),
+                }
+            }
+        } else {
+            match self.vm.run()? {
+                Status::Yield => Ok(Some(Match { query: self })),
+                Status::Halt => Ok(None),
+            }
         }
     }
 }
 
 impl<'query> Match<'query> {
-    /// TODO: Should we not return a property ref but accept a 'FromProperty'?
-    pub fn get(&self, idx: usize) -> Result<Property, Error> {
-        self.query.vm.access_return(idx)
+    pub fn get<P, E>(&self, idx: usize) -> Result<P, Error>
+    where
+        Property: TryInto<P, Error = E>,
+        Error: From<E>,
+    {
+        Ok(self.query.vm.access_return(idx)?.try_into()?)
     }
 }

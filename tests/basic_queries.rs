@@ -114,10 +114,10 @@ fn run_a_edge_a() {
     let mut txn = graph.mut_txn().unwrap();
     let mut query = stmt.query(&mut txn, None).unwrap();
     let matches = query.step().unwrap().unwrap();
-    let id_a = matches.get(0).unwrap();
-    let id_b = matches.get(1).unwrap();
-    let id_edge_a = matches.get(2).unwrap();
-    let id_edge_b = matches.get(3).unwrap();
+    let id_a: u64 = matches.get(0).unwrap();
+    let id_b: u64 = matches.get(1).unwrap();
+    let id_edge_a: u64 = matches.get(2).unwrap();
+    let id_edge_b: u64 = matches.get(3).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
@@ -374,7 +374,7 @@ fn return_from_set() {
 }
 
 #[test]
-fn run_delete() {
+fn run_delete_node() {
     let graph = Graph::open_anon().unwrap();
 
     let stmt = graph.prepare("CREATE (:PERSON)").unwrap();
@@ -392,6 +392,33 @@ fn run_delete() {
     assert!(query.step().unwrap().is_none());
 
     let del_stmt = graph.prepare("MATCH (a:PERSON) DELETE a").unwrap();
+    let mut txn = graph.mut_txn().unwrap();
+    del_stmt.execute(&mut txn, None).unwrap();
+    txn.commit().unwrap();
+
+    let mut txn = graph.txn().unwrap();
+    let mut query = stmt.query(&mut txn, None).unwrap();
+    assert!(query.step().unwrap().is_none());
+}
+
+#[test]
+fn run_delete_edge() {
+    let graph = Graph::open_anon().unwrap();
+
+    let stmt = graph
+        .prepare("CREATE (a:PERSON) CREATE (a) -[:KNOWS]-> (a)")
+        .unwrap();
+    let mut txn = graph.mut_txn().unwrap();
+    stmt.execute(&mut txn, None).unwrap();
+    txn.commit().unwrap();
+
+    let stmt = graph.prepare("MATCH () -[e]-> () RETURN ID(e)").unwrap();
+    let mut txn = graph.txn().unwrap();
+    let mut query = stmt.query(&mut txn, None).unwrap();
+    assert_eq!(1u64, query.step().unwrap().unwrap().get(0).unwrap(),);
+    assert!(query.step().unwrap().is_none());
+
+    let del_stmt = graph.prepare("MATCH () -[e]- () DELETE e").unwrap();
     let mut txn = graph.mut_txn().unwrap();
     del_stmt.execute(&mut txn, None).unwrap();
     txn.commit().unwrap();

@@ -399,7 +399,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::CheckNodeLabel { jump, node, label } => {
                     let node = &self.node_stack[*node];
-                    if node.label.as_str() == label.as_str() {
+                    if node.label() == label.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -407,7 +407,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 }
                 Instruction::CheckEdgeLabel { jump, edge, label } => {
                     let edge = &self.edge_stack[*edge];
-                    if edge.label.as_str() == label.as_str() {
+                    if edge.label() == label.as_str() {
                         self.current_inst += 1;
                     } else {
                         self.current_inst = *jump;
@@ -535,7 +535,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 }
                 Instruction::DeleteEdge { edge } => {
                     let edge = &self.edge_stack[*edge];
-                    self.txn.queue_update(Update::DeleteNode(edge.id))?;
+                    self.txn.queue_update(Update::DeleteEdge(edge.id))?;
                     self.current_inst += 1;
                 }
             }

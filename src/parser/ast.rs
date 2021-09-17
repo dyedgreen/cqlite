@@ -44,6 +44,7 @@ pub struct Annotation<'src> {
 }
 
 impl<'src> Annotation<'src> {
+    #[allow(dead_code)]
     pub fn new(name: &'src str, kind: &'src str) -> Self {
         Self {
             name: Some(name),
@@ -51,6 +52,7 @@ impl<'src> Annotation<'src> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_name(name: &'src str) -> Self {
         Self {
             name: Some(name),
@@ -58,6 +60,7 @@ impl<'src> Annotation<'src> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_label(label: &'src str) -> Self {
         Self {
             name: None,
@@ -65,6 +68,7 @@ impl<'src> Annotation<'src> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn empty() -> Self {
         Self {
             name: None,
@@ -80,6 +84,7 @@ pub struct Node<'src> {
 }
 
 impl<'src> Node<'src> {
+    #[allow(dead_code)]
     pub fn new(
         annotation: Annotation<'src>,
         properties: Vec<(&'src str, Expression<'src>)>,
@@ -90,6 +95,7 @@ impl<'src> Node<'src> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_annotation(annotation: Annotation<'src>) -> Self {
         Self {
             annotation,
@@ -97,6 +103,7 @@ impl<'src> Node<'src> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_properties(properties: Vec<(&'src str, Expression<'src>)>) -> Self {
         Self {
             annotation: Annotation::empty(),
@@ -172,10 +179,12 @@ pub enum Expression<'src> {
 }
 
 impl<'src> Expression<'src> {
+    #[allow(dead_code)]
     pub fn id_of(name: &'src str) -> Self {
         Self::IdOf { name }
     }
 
+    #[allow(dead_code)]
     pub fn property(name: &'src str, key: &'src str) -> Self {
         Self::Property { name, key }
     }
