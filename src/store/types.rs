@@ -1,6 +1,7 @@
 use crate::Error;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap, convert::TryInto};
+use std::convert::{TryFrom, TryInto};
+use std::{cmp::Ordering, collections::HashMap};
 
 // Some general notes
 //
@@ -178,3 +179,36 @@ impl<'prop> PropertyRef<'prop> {
         }
     }
 }
+
+macro_rules! try_from {
+    ($type:ty, $variant:ident) => {
+        impl TryFrom<Property> for $type {
+            type Error = Error;
+
+            fn try_from(value: Property) -> Result<Self, Self::Error> {
+                match value {
+                    Property::$variant(val) => Ok(val),
+                    _ => Err(Error::Todo),
+                }
+            }
+        }
+
+        impl TryFrom<Property> for Option<$type> {
+            type Error = Error;
+
+            fn try_from(value: Property) -> Result<Self, Self::Error> {
+                match value {
+                    Property::Null => Ok(None),
+                    prop => Ok(Some(prop.try_into()?)),
+                }
+            }
+        }
+    };
+}
+
+try_from!(u64, Id);
+try_from!(i64, Integer);
+try_from!(f64, Real);
+try_from!(bool, Boolean);
+try_from!(String, Text);
+try_from!(Vec<u8>, Blob);
