@@ -50,7 +50,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|res| {
-            res.map_err(|_| Error::Todo).and_then(|(key, bytes)| {
+            res.map_err(|err| err.into()).and_then(|(key, bytes)| {
                 let item = bincode::deserialize(bytes)?;
                 Ok((key, item))
             })

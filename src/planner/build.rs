@@ -30,14 +30,14 @@ impl<'src> BuildEnv<'src> {
     fn get_node(&self, name: &str) -> Result<Option<usize>, Error> {
         match self.names.get(&name) {
             Some(NamedEntity::Node(name)) => Ok(Some(*name)),
-            Some(NamedEntity::Edge(_)) => Err(Error::Todo),
+            Some(NamedEntity::Edge(_)) => Err(Error::IdentifierIsNotNode(name.to_string())),
             None => Ok(None),
         }
     }
 
     fn get_edge(&self, name: &str) -> Result<Option<usize>, Error> {
         match self.names.get(&name) {
-            Some(NamedEntity::Node(_)) => Err(Error::Todo),
+            Some(NamedEntity::Node(_)) => Err(Error::IdentifierIsNotEdge(name.to_string())),
             Some(NamedEntity::Edge(name)) => Ok(Some(*name)),
             None => Ok(None),
         }
@@ -46,7 +46,7 @@ impl<'src> BuildEnv<'src> {
     fn create_node(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
             Some(NamedEntity::Node(name)) => Ok(*name),
-            Some(NamedEntity::Edge(_)) => Err(Error::Todo),
+            Some(NamedEntity::Edge(_)) => Err(Error::IdentifierExists(name.to_string())),
             None => {
                 let next_name = self.next_name();
                 self.names.insert(name, NamedEntity::Node(next_name));
@@ -57,7 +57,7 @@ impl<'src> BuildEnv<'src> {
 
     fn create_edge(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
-            Some(NamedEntity::Node(_)) => Err(Error::Todo),
+            Some(NamedEntity::Node(_)) => Err(Error::IdentifierExists(name.to_string())),
             Some(NamedEntity::Edge(name)) => Ok(*name),
             None => {
                 let next_name = self.next_name();
@@ -80,12 +80,20 @@ impl<'src> BuildEnv<'src> {
                 ast::Literal::Text(t) => Property::Text(t.to_string()),
                 ast::Literal::Null => Property::Null,
             }),
-            ast::Expression::IdOf { name } => match self.names.get(name).ok_or(Error::Todo)? {
+            ast::Expression::IdOf { name } => match self
+                .names
+                .get(name)
+                .ok_or(Error::UnknownIdentifier(name.to_string()))?
+            {
                 NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
                 NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
             },
             ast::Expression::Property { name, key } => {
-                match self.names.get(name).ok_or(Error::Todo)? {
+                match self
+                    .names
+                    .get(name)
+                    .ok_or(Error::UnknownIdentifier(name.to_string()))?
+                {
                     NamedEntity::Node(node) => LoadProperty::PropertyOfNode { node: *node, key },
                     NamedEntity::Edge(edge) => LoadProperty::PropertyOfEdge { edge: *edge, key },
                 }
@@ -126,7 +134,11 @@ impl<'src> BuildEnv<'src> {
                 Filter::Eq(self.build_load_property(a)?, self.build_load_property(b)?),
             ),
 
-            ast::Condition::IdEq(name, value) => match self.names.get(name).ok_or(Error::Todo)? {
+            ast::Condition::IdEq(name, value) => match self
+                .names
+                .get(name)
+                .ok_or(Error::UnknownIdentifier(name.to_string()))?
+            {
                 NamedEntity::Node(node) => Filter::NodeHasId {
                     node: *node,
                     id: self.build_load_property(value)?,
@@ -392,8 +404,12 @@ impl<'src> BuildEnv<'src> {
                     .transpose()?
                     .unwrap_or_else(|| self.next_name()),
                 label: label,
-                origin: self.get_node(origin)?.ok_or(Error::Todo)?,
-                target: self.get_node(target)?.ok_or(Error::Todo)?,
+                origin: self
+                    .get_node(origin)?
+                    .ok_or(Error::UnknownIdentifier(origin.to_string()))?,
+                target: self
+                    .get_node(target)?
+                    .ok_or(Error::UnknownIdentifier(target.to_string()))?,
                 properties: properties
                     .iter()
                     .map(|(key, expr)| -> Result<_, Error> {
@@ -419,7 +435,7 @@ impl<'src> BuildEnv<'src> {
                 key: clause.key,
                 value: self.build_load_property(&clause.value)?,
             }),
-            None => Err(Error::Todo),
+            None => Err(Error::UnknownIdentifier(clause.name.to_string())),
         }
     }
 
@@ -427,7 +443,7 @@ impl<'src> BuildEnv<'src> {
         match self.names.get(name) {
             Some(&NamedEntity::Node(node)) => Ok(UpdateStep::DeleteNode { node }),
             Some(&NamedEntity::Edge(edge)) => Ok(UpdateStep::DeleteEdge { edge }),
-            None => Err(Error::Todo),
+            None => Err(Error::UnknownIdentifier(name.to_string())),
         }
     }
 }

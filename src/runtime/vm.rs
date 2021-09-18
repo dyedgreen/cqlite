@@ -337,7 +337,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let iter = self.edge_iters.last_mut().unwrap();
                     if let Some(edge_id) = iter.next() {
                         self.edge_stack
-                            .push(self.txn.load_edge(edge_id?)?.ok_or(Error::Todo)?);
+                            .push(self.txn.load_edge(edge_id?)?.ok_or(Error::MissingEdge)?);
                         self.current_inst += 1;
                     } else {
                         self.edge_iters.pop();
@@ -347,13 +347,13 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::LoadOriginNode { edge } => {
                     let edge = &self.edge_stack[*edge];
-                    let node = self.txn.load_node(edge.origin)?.ok_or(Error::Todo)?;
+                    let node = self.txn.load_node(edge.origin)?.ok_or(Error::MissingNode)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
                 Instruction::LoadTargetNode { edge } => {
                     let edge = &self.edge_stack[*edge];
-                    let node = self.txn.load_node(edge.target)?.ok_or(Error::Todo)?;
+                    let node = self.txn.load_node(edge.target)?.ok_or(Error::MissingNode)?;
                     self.node_stack.push(node);
                     self.current_inst += 1;
                 }
@@ -361,9 +361,9 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     let node = &self.node_stack[*node];
                     let edge = &self.edge_stack[*edge];
                     let other = if edge.target == node.id {
-                        self.txn.load_node(edge.origin)?.ok_or(Error::Todo)?
+                        self.txn.load_node(edge.origin)?.ok_or(Error::MissingNode)?
                     } else {
-                        self.txn.load_node(edge.target)?.ok_or(Error::Todo)?
+                        self.txn.load_node(edge.target)?.ok_or(Error::MissingNode)?
                     };
                     self.node_stack.push(other);
                     self.current_inst += 1;

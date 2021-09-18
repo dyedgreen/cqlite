@@ -10,12 +10,11 @@ mod iter;
 mod txn;
 mod types;
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) use iter::{EdgeIter, NodeIter};
 pub use types::{Edge, Node, Property, PropertyRef};
-
-// alloc the pages to write to
-// them every time ... You can free them
-// when you replace them ...
 
 const ID_SQUENCE: usize = 0;
 const DB_NODES: usize = 1;
@@ -70,10 +69,10 @@ impl Store {
     pub fn txn(&self) -> Result<StoreTxn, Error> {
         let txn = Env::txn_begin(&self.env)?;
         let id_seq = AtomicU64::new(txn.root(ID_SQUENCE));
-        let nodes = txn.root_db(DB_NODES).ok_or(Error::Todo)?;
-        let edges = txn.root_db(DB_EDGES).ok_or(Error::Todo)?;
-        let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Todo)?;
-        let targets = txn.root_db(DB_TARGETS).ok_or(Error::Todo)?;
+        let nodes = txn.root_db(DB_NODES).ok_or(Error::Corruption)?;
+        let edges = txn.root_db(DB_EDGES).ok_or(Error::Corruption)?;
+        let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Corruption)?;
+        let targets = txn.root_db(DB_TARGETS).ok_or(Error::Corruption)?;
         Ok(StoreTxn {
             txn: DynTxn::Txn(txn),
             id_seq,
@@ -169,7 +168,7 @@ impl<'e> StoreTxn<'e> {
     }
 
     pub fn update_node(&mut self, node: u64, key: &str, value: Property) -> Result<(), Error> {
-        let mut node = self.load_node(node)?.ok_or(Error::Todo)?;
+        let mut node = self.load_node(node)?.ok_or(Error::MissingNode)?;
         if value == Property::Null {
             node.properties.remove(key);
         } else {
@@ -189,7 +188,7 @@ impl<'e> StoreTxn<'e> {
             .map(|(k, _)| *k == node)
             .unwrap_or(false);
         if has_origin || has_target {
-            Err(Error::Todo)
+            Err(Error::DeleteConnectedAttempt)
         } else {
             btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
             Ok(())
@@ -197,7 +196,7 @@ impl<'e> StoreTxn<'e> {
     }
 
     pub fn unchecked_create_edge(&mut self, edge: Edge) -> Result<Edge, Error> {
-        let bytes = bincode::serialize(&edge).map_err(|_| Error::Todo)?;
+        let bytes = bincode::serialize(&edge)?;
         btree::put(&mut self.txn, &mut self.edges, &edge.id, bytes.as_ref())?;
         btree::put(&mut self.txn, &mut self.origins, &edge.origin, &edge.id)?;
         btree::put(&mut self.txn, &mut self.targets, &edge.target, &edge.id)?;
@@ -205,7 +204,7 @@ impl<'e> StoreTxn<'e> {
     }
 
     pub fn update_edge(&mut self, edge: u64, key: &str, value: Property) -> Result<(), Error> {
-        let mut edge = self.load_edge(edge)?.ok_or(Error::Todo)?;
+        let mut edge = self.load_edge(edge)?.ok_or(Error::MissingEdge)?;
         if value == Property::Null {
             edge.properties.remove(key);
         } else {
@@ -241,7 +240,7 @@ impl<'e> StoreTxn<'e> {
             self.updates.try_write()?.push(update);
             Ok(())
         } else {
-            Err(Error::Todo)
+            Err(Error::ReadOnlyWriteAttempt)
         }
     }
 
@@ -312,138 +311,5 @@ impl<'e> StoreTxn<'e> {
         self.txn.set_root(DB_ORIGINS, self.origins.db)?;
         self.txn.set_root(DB_TARGETS, self.targets.db)?;
         self.txn.commit()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn id_seq_works() {
-        let store = Store::open_anon().unwrap();
-
-        let txn = store.mut_txn().unwrap();
-        assert_eq!(0, txn.id_seq());
-        assert_eq!(1, txn.id_seq());
-        assert_eq!(2, txn.id_seq());
-        txn.commit().unwrap();
-
-        let txn = store.mut_txn().unwrap();
-        assert_eq!(3, txn.id_seq());
-        assert_eq!(4, txn.id_seq());
-        assert_eq!(5, txn.id_seq());
-        txn.commit().unwrap();
-    }
-
-    #[test]
-    fn create_nodes_and_edges() {
-        let store = Store::open("test.gqlite").unwrap();
-        let mut txn = store.mut_txn().unwrap();
-        let node1 = txn
-            .unchecked_create_node(Node {
-                id: txn.id_seq(),
-                label: "PERSON".to_string(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        let node2 = txn
-            .unchecked_create_node(Node {
-                id: txn.id_seq(),
-                label: "PERSON".to_string(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        let edge = txn
-            .unchecked_create_edge(Edge {
-                id: txn.id_seq(),
-                label: "KNOWS".to_string(),
-                origin: node1.id(),
-                target: node2.id(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        txn.commit().unwrap();
-
-        let txn = store.txn().unwrap();
-        let node1 = txn.load_node(node1.id()).unwrap().unwrap();
-        let node2 = txn.load_node(node2.id()).unwrap().unwrap();
-        let edge = txn.load_edge(edge.id()).unwrap().unwrap();
-
-        assert_eq!(node1.label(), "PERSON");
-        assert_eq!(node2.label(), "PERSON");
-        assert_eq!(edge.label(), "KNOWS");
-    }
-
-    #[test]
-    fn update_nodes_and_edges() {
-        let store = Store::open_anon().unwrap();
-        let mut txn = store.mut_txn().unwrap();
-        let node = txn
-            .unchecked_create_node(Node {
-                id: txn.id_seq(),
-                label: "PERSON".to_string(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        let edge = txn
-            .unchecked_create_edge(Edge {
-                id: txn.id_seq(),
-                label: "KNOWS".to_string(),
-                origin: node.id(),
-                target: node.id(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        txn.commit().unwrap();
-
-        let mut txn = store.mut_txn().unwrap();
-        txn.update_node(node.id(), "test", Property::Integer(42))
-            .unwrap();
-        txn.update_edge(edge.id(), "test", Property::Real(42.0))
-            .unwrap();
-        txn.commit().unwrap();
-
-        let txn = store.txn().unwrap();
-        let node = txn.load_node(node.id()).unwrap().unwrap();
-        let edge = txn.load_edge(edge.id()).unwrap().unwrap();
-
-        assert_eq!(node.property("test"), &Property::Integer(42));
-        assert_eq!(edge.property("test"), &Property::Real(42.0));
-    }
-
-    #[test]
-    fn delete_nodes_and_edges() {
-        let store = Store::open_anon().unwrap();
-        let mut txn = store.mut_txn().unwrap();
-        let node = txn
-            .unchecked_create_node(Node {
-                id: txn.id_seq(),
-                label: "PERSON".to_string(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        let edge = txn
-            .unchecked_create_edge(Edge {
-                id: txn.id_seq(),
-                label: "KNOWS".to_string(),
-                origin: node.id(),
-                target: node.id(),
-                properties: Default::default(),
-            })
-            .unwrap();
-        txn.commit().unwrap();
-
-        let mut txn = store.mut_txn().unwrap();
-        assert!(txn.load_node(node.id()).unwrap().is_some());
-        assert!(txn.load_edge(edge.id()).unwrap().is_some());
-
-        txn.delete_edge(edge.id()).unwrap();
-        txn.delete_node(node.id()).unwrap();
-        txn.commit().unwrap();
-
-        let txn = store.txn().unwrap();
-        assert!(txn.load_node(node.id()).unwrap().is_none());
-        assert!(txn.load_edge(edge.id()).unwrap().is_none());
     }
 }

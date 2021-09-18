@@ -174,8 +174,8 @@ impl<'prop> PropertyRef<'prop> {
         use PropertyRef::*;
         match self {
             &Id(val) => Ok(val),
-            &Integer(val) => Ok(val.try_into().map_err(|_| Error::Todo)?),
-            _ => Err(Error::Todo),
+            &Integer(val) => Ok(val.try_into().map_err(|_| Error::TypeMismatch)?),
+            _ => Err(Error::TypeMismatch),
         }
     }
 }
@@ -188,7 +188,7 @@ macro_rules! try_from {
             fn try_from(value: Property) -> Result<Self, Self::Error> {
                 match value {
                     Property::$variant(val) => Ok(val),
-                    _ => Err(Error::Todo),
+                    _ => Err(Error::TypeMismatch),
                 }
             }
         }

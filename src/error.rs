@@ -11,9 +11,22 @@ pub enum Error {
     #[error(transparent)]
     IO(#[from] std::io::Error),
 
-    /// Storage corruption error.
+    /// Database storage corruption error.
     #[error("Storage corruption")]
     Corruption,
+
+    /// Lock poisoning error.
+    #[error("Lock poisoning")]
+    Poison,
+
+    /// Internal coordination error.
+    #[error("Internal")]
+    Internal,
+
+    /// Attempted to write to a read
+    /// only transaction.
+    #[error("Read only write attempt")]
+    ReadOnlyWriteAttempt,
 
     /// CYPHER syntax error.
     #[error("Invalid syntax")]
@@ -23,14 +36,36 @@ pub enum Error {
         offset: usize,
         expected: String,
     },
+    /// The given identifier exists
+    /// but does not refer to a node.
+    #[error("Identifier {0} does not refer to a node")]
+    IdentifierIsNotNode(String),
+    /// The given identifier exists
+    /// but does not refer to an edge.
+    #[error("Identifier {0} does not refer to an edge")]
+    IdentifierIsNotEdge(String),
+    /// The given identifier already exists.
+    #[error("Identifier {0} already exists")]
+    IdentifierExists(String),
+    /// The given identifier does not exists.
+    #[error("Identifier {0} does not exists")]
+    UnknownIdentifier(String),
 
-    /// Lock poisoning error.
-    #[error("Lock poisoning")]
-    Poison,
+    /// Attempted type conversion failed.
+    #[error("Type mismatch")]
+    TypeMismatch,
 
-    /// Internal coordination error.
-    #[error("Internal")]
-    Internal,
+    /// Attempted to load a missing node.
+    #[error("Missing node")]
+    MissingNode,
+    /// Attempted to load a missing edge.
+    #[error("Missing edge")]
+    MissingEdge,
+    /// Attempted to delete a node which is
+    /// still connected with the rest of the
+    /// graph.
+    #[error("Attempt to delete connected node")]
+    DeleteConnectedAttempt,
 
     #[error("TODO")]
     #[deprecated]

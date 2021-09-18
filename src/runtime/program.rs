@@ -56,7 +56,7 @@ impl CompileEnv {
     }
 
     fn get_stack_idx(&self, name: usize) -> Result<usize, Error> {
-        self.names.get(&name).map(|idx| *idx).ok_or(Error::Todo)
+        self.names.get(&name).map(|idx| *idx).ok_or(Error::Internal)
     }
 
     fn adjust_jumps(instructions: &mut [Instruction], from: usize, to: usize) {
