@@ -75,21 +75,21 @@ mod tests {
         let mut txn = store.txn().unwrap();
         let mut vm = VirtualMachine::new(&mut txn, &prog, HashMap::new());
 
-        assert_eq!(Ok(Status::Yield), vm.run());
+        assert_eq!(Status::Yield, vm.run().unwrap());
         assert_eq!(2, vm.node_stack.len());
         assert_eq!("PERSON_A", vm.node_stack[0].label());
         assert_eq!("PERSON_B", vm.node_stack[1].label());
         assert_eq!(1, vm.edge_stack.len());
         assert_eq!("KNOWS", vm.edge_stack[0].label());
 
-        assert_eq!(Ok(Status::Yield), vm.run());
+        assert_eq!(Status::Yield, vm.run().unwrap());
         assert_eq!(2, vm.node_stack.len());
         assert_eq!("PERSON_B", vm.node_stack[0].label());
         assert_eq!("PERSON_A", vm.node_stack[1].label());
         assert_eq!(1, vm.edge_stack.len());
         assert_eq!("KNOWS", vm.edge_stack[0].label());
 
-        assert_eq!(Ok(Status::Halt), vm.run());
+        assert_eq!(Status::Halt, vm.run().unwrap());
     }
 
     #[test]
