@@ -16,6 +16,23 @@ impl Sealed for () {
 
 impl Params for () {}
 
+impl<K, V> Sealed for (K, V)
+where
+    K: AsRef<str>,
+    V: Into<Property>,
+{
+    fn build(self) -> HashMap<String, Property> {
+        [self].build()
+    }
+}
+
+impl<K, V> Params for (K, V)
+where
+    K: AsRef<str>,
+    V: Into<Property>,
+{
+}
+
 impl<K, V, const N: usize> Sealed for [(K, V); N]
 where
     K: AsRef<str>,

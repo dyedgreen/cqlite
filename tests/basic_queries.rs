@@ -306,7 +306,7 @@ fn run_a_where_with_parameters() {
         )
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, (("min_age", 18i64),)).unwrap();
+    let mut matches = stmt.query(&mut txn, ("min_age", 18i64)).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -326,7 +326,7 @@ fn run_set() {
         .prepare("MATCH (a:PERSON) SET a.answer = $ans")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, (("ans", 42),)).unwrap();
+    stmt.execute(&mut txn, ("ans", 42)).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
