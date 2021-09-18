@@ -320,6 +320,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn id_seq_works() {
+        let store = Store::open_anon().unwrap();
+
+        let txn = store.mut_txn().unwrap();
+        assert_eq!(0, txn.id_seq());
+        assert_eq!(1, txn.id_seq());
+        assert_eq!(2, txn.id_seq());
+        txn.commit().unwrap();
+
+        let txn = store.mut_txn().unwrap();
+        assert_eq!(3, txn.id_seq());
+        assert_eq!(4, txn.id_seq());
+        assert_eq!(5, txn.id_seq());
+        txn.commit().unwrap();
+    }
+
+    #[test]
     fn create_nodes_and_edges() {
         let store = Store::open("test.gqlite").unwrap();
         let mut txn = store.mut_txn().unwrap();
