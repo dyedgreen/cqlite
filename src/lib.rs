@@ -1,15 +1,17 @@
 use planner::QueryPlan;
 use runtime::{Program, Status, VirtualMachine};
-use std::{collections::HashMap, convert::TryInto, path::Path};
+use std::{convert::TryInto, path::Path};
 use store::{Store, StoreTxn};
 
 pub(crate) mod error;
+pub(crate) mod params;
 pub(crate) mod parser;
 pub(crate) mod planner;
 pub(crate) mod runtime;
 pub(crate) mod store;
 
 pub use error::Error;
+pub use params::Params;
 pub use store::Property;
 
 /// TODO: A handle to the database
@@ -34,7 +36,7 @@ pub struct Query<'stmt, 'txn> {
     vm: VirtualMachine<'stmt, 'txn, 'stmt>,
 }
 
-/// TODO: A guard to access a set of matched
+/// TODO: A RAII guard to access a set of matched
 /// nodes and edges
 pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
@@ -78,30 +80,30 @@ impl<'graph> Txn<'graph> {
 }
 
 impl<'graph> Statement<'graph> {
-    /// TODO: Have a parameter trait
-    pub fn query<'stmt, 'txn>(
+    pub fn query<'stmt, 'txn, P>(
         &'stmt self,
         txn: &'txn mut Txn<'graph>,
-        parameters: Option<HashMap<String, Property>>,
-    ) -> Result<Query<'stmt, 'txn>, Error> {
+        params: P,
+    ) -> Result<Query<'stmt, 'txn>, Error>
+    where
+        P: Params,
+    {
         txn.0.flush()?;
         Ok(Query {
             stmt: self,
-            vm: VirtualMachine::new(
-                &txn.0,
-                &self.program,
-                parameters.unwrap_or_else(HashMap::new),
-            ),
+            vm: VirtualMachine::new(&txn.0, &self.program, params.build()),
         })
     }
 
-    /// TODO: Have a parameter trait
-    pub fn execute<'stmt, 'txn>(
+    pub fn execute<'stmt, 'txn, P>(
         &'stmt self,
-        txn: &'txn mut Txn<'stmt>,
-        parameters: Option<HashMap<String, Property>>,
-    ) -> Result<(), Error> {
-        let mut query = self.query(txn, parameters)?;
+        txn: &'txn mut Txn<'graph>,
+        params: P,
+    ) -> Result<(), Error>
+    where
+        P: Params,
+    {
+        let mut query = self.query(txn, params)?;
         while let Some(_) = query.step()? {}
         txn.0.flush()?;
         Ok(())

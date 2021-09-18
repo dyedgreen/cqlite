@@ -224,3 +224,15 @@ try_from!(f64, Real);
 try_from!(bool, Boolean);
 try_from!(String, Text);
 try_from!(Vec<u8>, Blob);
+
+impl From<i32> for Property {
+    fn from(value: i32) -> Self {
+        Property::Integer(value.into())
+    }
+}
+
+impl From<Option<i32>> for Property {
+    fn from(value: Option<i32>) -> Self {
+        value.map(|v| v.into()).unwrap_or(Property::Null)
+    }
+}

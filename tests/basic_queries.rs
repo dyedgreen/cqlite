@@ -4,21 +4,24 @@ use gqlite::{Graph, Property};
 fn run_a_to_b() {
     let graph = Graph::open_anon().unwrap();
 
-    let create_node_stmt = graph.prepare("CREATE (:PERSON)").unwrap();
-    let create_edge_stmt = graph
-        .prepare("MATCH (a) MATCH (b) WHERE ID(a) <> ID(b) CREATE (a) -[:KNOWS]-> (b)")
-        .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    create_node_stmt.execute(&mut txn, None).unwrap();
-    create_node_stmt.execute(&mut txn, None).unwrap();
-    create_edge_stmt.execute(&mut txn, None).unwrap();
+    graph
+        .prepare("CREATE (:PERSON) CREATE (:PERSON)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    graph
+        .prepare("MATCH (a) MATCH (b) WHERE ID(a) <> ID(b) CREATE (a) -[:KNOWS]-> (b)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a) -[e]-> (b) RETURN ID(a), ID(b), ID(e)")
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -41,14 +44,14 @@ fn run_a_edge_b() {
         .prepare("CREATE (a:PERSON) CREATE (b:PERSON) CREATE (a) -[:KNOWS]-> (b)")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a) -[e]- (b) RETURN ID(a), ID(b), ID(e)")
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -78,14 +81,14 @@ fn run_a_to_a() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a) -[e]-> (a) RETURN ID(a), ID(e)")
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -112,7 +115,7 @@ fn run_a_edge_a() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     let matches = query.step().unwrap().unwrap();
     let id_a: u64 = matches.get(0).unwrap();
     let id_b: u64 = matches.get(1).unwrap();
@@ -125,7 +128,7 @@ fn run_a_edge_a() {
         .unwrap();
     let mut txn = graph.txn().unwrap();
 
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(id_a, result.get(0).unwrap());
@@ -159,14 +162,14 @@ fn run_a_knows_b() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a) -[e:KNOWS]-> (b) RETURN ID(a), ID(b), ID(e)")
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -190,7 +193,7 @@ fn run_a_edge_b_with_where_property() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
@@ -203,7 +206,7 @@ fn run_a_edge_b_with_where_property() {
         )
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -226,7 +229,7 @@ fn run_a_edge_b_with_property_map() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
@@ -238,7 +241,7 @@ fn run_a_edge_b_with_property_map() {
         )
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -255,7 +258,7 @@ fn run_a_edge_b_with_where_id() {
         .prepare("CREATE (a:PERSON) CREATE (b:PERSON)")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
@@ -268,7 +271,7 @@ fn run_a_edge_b_with_where_id() {
         )
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt.query(&mut txn, None).unwrap();
+    let mut matches = stmt.query(&mut txn, ()).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(1), result.get(0).unwrap());
@@ -290,7 +293,7 @@ fn run_a_where_with_parameters() {
         )
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
@@ -303,16 +306,7 @@ fn run_a_where_with_parameters() {
         )
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut matches = stmt
-        .query(
-            &mut txn,
-            Some(
-                vec![("min_age".into(), Property::Integer(18))]
-                    .into_iter()
-                    .collect(),
-            ),
-        )
-        .unwrap();
+    let mut matches = stmt.query(&mut txn, (("min_age", 18i64),)).unwrap();
 
     let result = matches.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), result.get(0).unwrap());
@@ -325,19 +319,21 @@ fn run_set() {
 
     let stmt = graph.prepare("CREATE (:PERSON)").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
-    let stmt = graph.prepare("MATCH (a:PERSON) SET a.answer = 42").unwrap();
+    let stmt = graph
+        .prepare("MATCH (a:PERSON) SET a.answer = $ans")
+        .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, (("ans", 42),)).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a:PERSON) WHERE ID(a) = 0 RETURN a.answer")
         .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     let results = query.step().unwrap().unwrap();
     assert_eq!(Property::Integer(42), results.get(0).unwrap());
 }
@@ -348,14 +344,14 @@ fn return_from_set() {
 
     let stmt = graph.prepare("CREATE (:PERSON)").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
         .prepare("MATCH (a:PERSON) SET a.answer = 42 RETURN ID(a), a.answer")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     let results = query.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), results.get(0).unwrap());
     assert_eq!(Property::Integer(42), results.get(1).unwrap());
@@ -366,7 +362,7 @@ fn return_from_set() {
         .prepare("MATCH (a:PERSON) RETURN ID(a), a.answer")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     let results = query.step().unwrap().unwrap();
     assert_eq!(Property::Id(0), results.get(0).unwrap());
     assert_eq!(Property::Integer(42), results.get(1).unwrap());
@@ -379,12 +375,12 @@ fn run_delete_node() {
 
     let stmt = graph.prepare("CREATE (:PERSON)").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph.prepare("MATCH (a:PERSON) RETURN ID(a)").unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     assert_eq!(
         Property::Id(0),
         query.step().unwrap().unwrap().get(0).unwrap(),
@@ -393,11 +389,11 @@ fn run_delete_node() {
 
     let del_stmt = graph.prepare("MATCH (a:PERSON) DELETE a").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    del_stmt.execute(&mut txn, None).unwrap();
+    del_stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     assert!(query.step().unwrap().is_none());
 }
 
@@ -409,22 +405,22 @@ fn run_delete_edge() {
         .prepare("CREATE (a:PERSON) CREATE (a) -[:KNOWS]-> (a)")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let stmt = graph.prepare("MATCH () -[e]-> () RETURN ID(e)").unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     assert_eq!(1u64, query.step().unwrap().unwrap().get(0).unwrap(),);
     assert!(query.step().unwrap().is_none());
 
     let del_stmt = graph.prepare("MATCH () -[e]- () DELETE e").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    del_stmt.execute(&mut txn, None).unwrap();
+    del_stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, None).unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
     assert!(query.step().unwrap().is_none());
 }
 
@@ -436,10 +432,10 @@ fn run_bad_delete() {
         .prepare("CREATE (a:PERSON) CREATE (a) -[:KNOWS]-> (a)")
         .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, None).unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
     txn.commit().unwrap();
 
     let del_stmt = graph.prepare("MATCH (a:PERSON) DELETE a").unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    assert!(del_stmt.execute(&mut txn, None).is_err());
+    assert!(del_stmt.execute(&mut txn, ()).is_err());
 }
