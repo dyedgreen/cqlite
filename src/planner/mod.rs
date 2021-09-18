@@ -1,4 +1,5 @@
 mod build;
+mod optimize;
 mod plan;
 
 pub(crate) use plan::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
@@ -40,11 +41,11 @@ mod tests {
             returns: vec![
                 LoadProperty::PropertyOfNode {
                     node: 0,
-                    key: "name".into(),
+                    key: "name",
                 },
                 LoadProperty::PropertyOfNode {
                     node: 2,
-                    key: "name".into(),
+                    key: "name",
                 },
             ],
         };

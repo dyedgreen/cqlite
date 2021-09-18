@@ -55,9 +55,7 @@ impl Graph {
 
     pub fn prepare<'graph>(&'graph self, query: &str) -> Result<Statement<'graph>, Error> {
         let ast = parser::parse(query)?;
-        let plan = QueryPlan::new(&ast)?;
-        // TODO
-        // plan.optimize();
+        let plan = QueryPlan::new(&ast)?.optimize()?;
         Ok(Statement {
             _graph: self,
             program: Program::new(&plan)?,

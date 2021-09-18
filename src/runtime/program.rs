@@ -115,11 +115,11 @@ impl CompileEnv {
             }
             LoadProperty::PropertyOfNode { node, key } => {
                 let node = self.get_stack_idx(*node)?;
-                Access::NodeProperty(node, key.clone())
+                Access::NodeProperty(node, key.to_string())
             }
             LoadProperty::PropertyOfEdge { edge, key } => {
                 let edge = self.get_stack_idx(*edge)?;
-                Access::EdgeProperty(edge, key.clone())
+                Access::EdgeProperty(edge, key.to_string())
             }
             LoadProperty::Parameter { name } => Access::Parameter(name.to_string()),
         })
@@ -197,7 +197,7 @@ impl CompileEnv {
                 self.instructions.push(Instruction::CheckNodeLabel {
                     jump: JUMP_PLACEHOLDER,
                     node,
-                    label: label.clone(),
+                    label: label.to_string(),
                 });
             }
             Filter::EdgeHasLabel { edge, label } => {
@@ -205,7 +205,7 @@ impl CompileEnv {
                 self.instructions.push(Instruction::CheckEdgeLabel {
                     jump: JUMP_PLACEHOLDER,
                     edge,
-                    label: label.clone(),
+                    label: label.to_string(),
                 });
             }
 

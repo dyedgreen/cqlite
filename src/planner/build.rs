@@ -67,11 +67,12 @@ impl<'src> BuildEnv<'src> {
         }
     }
 
-    fn build_load_property(&mut self, expr: &ast::Expression) -> Result<LoadProperty, Error> {
+    fn build_load_property(
+        &mut self,
+        expr: &'src ast::Expression<'src>,
+    ) -> Result<LoadProperty<'src>, Error> {
         let load = match expr {
-            ast::Expression::Parameter(name) => LoadProperty::Parameter {
-                name: name.to_string(),
-            },
+            ast::Expression::Parameter(name) => LoadProperty::Parameter { name },
             ast::Expression::Literal(literal) => LoadProperty::Constant(match literal {
                 ast::Literal::Integer(i) => Property::Integer(*i),
                 ast::Literal::Real(r) => Property::Real(*r),
@@ -85,21 +86,15 @@ impl<'src> BuildEnv<'src> {
             },
             ast::Expression::Property { name, key } => {
                 match self.names.get(name).ok_or(Error::Todo)? {
-                    NamedEntity::Node(node) => LoadProperty::PropertyOfNode {
-                        node: *node,
-                        key: key.to_string(),
-                    },
-                    NamedEntity::Edge(edge) => LoadProperty::PropertyOfEdge {
-                        edge: *edge,
-                        key: key.to_string(),
-                    },
+                    NamedEntity::Node(node) => LoadProperty::PropertyOfNode { node: *node, key },
+                    NamedEntity::Edge(edge) => LoadProperty::PropertyOfEdge { edge: *edge, key },
                 }
             }
         };
         Ok(load)
     }
 
-    fn build_filter(&mut self, cond: &ast::Condition) -> Result<Filter, Error> {
+    fn build_filter(&mut self, cond: &'src ast::Condition<'src>) -> Result<Filter<'src>, Error> {
         let filter = match cond {
             ast::Condition::And(a, b) => Filter::and(self.build_filter(a)?, self.build_filter(b)?),
             ast::Condition::Or(a, b) => Filter::or(self.build_filter(a)?, self.build_filter(b)?),
@@ -148,24 +143,18 @@ impl<'src> BuildEnv<'src> {
     fn build_filters_from_property_map(
         &mut self,
         edge_or_node: NamedEntity,
-        property_map: &[(&'src str, ast::Expression<'src>)],
-    ) -> Result<Vec<MatchStep>, Error> {
+        property_map: &'src [(&'src str, ast::Expression<'src>)],
+    ) -> Result<Vec<MatchStep<'src>>, Error> {
         property_map
             .iter()
             .map(|(key, value)| {
                 Ok(MatchStep::Filter(match edge_or_node {
                     NamedEntity::Node(node) => Filter::Eq(
-                        LoadProperty::PropertyOfNode {
-                            node,
-                            key: key.to_string(),
-                        },
+                        LoadProperty::PropertyOfNode { node, key },
                         self.build_load_property(value)?,
                     ),
                     NamedEntity::Edge(edge) => Filter::Eq(
-                        LoadProperty::PropertyOfEdge {
-                            edge,
-                            key: key.to_string(),
-                        },
+                        LoadProperty::PropertyOfEdge { edge, key },
                         self.build_load_property(value)?,
                     ),
                 }))
@@ -173,7 +162,10 @@ impl<'src> BuildEnv<'src> {
             .collect()
     }
 
-    fn build_match(&mut self, clause: &ast::MatchClause<'src>) -> Result<Vec<MatchStep>, Error> {
+    fn build_match(
+        &mut self,
+        clause: &'src ast::MatchClause<'src>,
+    ) -> Result<Vec<MatchStep<'src>>, Error> {
         let mut steps = vec![];
 
         // FIXME: this is an eyesore ...
@@ -194,7 +186,7 @@ impl<'src> BuildEnv<'src> {
         if let Some(label) = clause.start.annotation.label {
             steps.push(MatchStep::Filter(Filter::NodeHasLabel {
                 node: prev_node_name,
-                label: label.to_string(),
+                label,
             }));
         }
 
@@ -267,7 +259,7 @@ impl<'src> BuildEnv<'src> {
             if let Some(label) = edge.annotation.label {
                 steps.push(MatchStep::Filter(Filter::EdgeHasLabel {
                     edge: edge_name,
-                    label: label.to_string(),
+                    label,
                 }));
             }
 
@@ -353,7 +345,7 @@ impl<'src> BuildEnv<'src> {
             if let Some(label) = node.annotation.label {
                 steps.push(MatchStep::Filter(Filter::NodeHasLabel {
                     node: prev_node_name,
-                    label: label.to_string(),
+                    label,
                 }));
             }
 
@@ -368,8 +360,8 @@ impl<'src> BuildEnv<'src> {
 
     fn build_create_update(
         &mut self,
-        clause: &ast::CreateClause<'src>,
-    ) -> Result<UpdateStep, Error> {
+        clause: &'src ast::CreateClause<'src>,
+    ) -> Result<UpdateStep<'src>, Error> {
         match clause {
             ast::CreateClause::CreateNode {
                 name,
@@ -380,11 +372,11 @@ impl<'src> BuildEnv<'src> {
                     .map(|n| self.create_node(n))
                     .transpose()?
                     .unwrap_or_else(|| self.next_name()),
-                label: label.to_string(),
+                label,
                 properties: properties
                     .iter()
                     .map(|(key, expr)| -> Result<_, Error> {
-                        Ok((key.to_string(), self.build_load_property(expr)?))
+                        Ok((*key, self.build_load_property(expr)?))
                     })
                     .collect::<Result<_, Error>>()?,
             }),
@@ -399,36 +391,39 @@ impl<'src> BuildEnv<'src> {
                     .map(|n| self.create_edge(n))
                     .transpose()?
                     .unwrap_or_else(|| self.next_name()),
-                label: label.to_string(),
+                label: label,
                 origin: self.get_node(origin)?.ok_or(Error::Todo)?,
                 target: self.get_node(target)?.ok_or(Error::Todo)?,
                 properties: properties
                     .iter()
                     .map(|(key, expr)| -> Result<_, Error> {
-                        Ok((key.to_string(), self.build_load_property(expr)?))
+                        Ok((*key, self.build_load_property(expr)?))
                     })
                     .collect::<Result<_, Error>>()?,
             }),
         }
     }
 
-    fn build_set_update(&mut self, clause: &ast::SetClause<'src>) -> Result<UpdateStep, Error> {
+    fn build_set_update(
+        &mut self,
+        clause: &'src ast::SetClause<'src>,
+    ) -> Result<UpdateStep<'src>, Error> {
         match self.names.get(clause.name) {
             Some(NamedEntity::Node(node)) => Ok(UpdateStep::SetNodeProperty {
                 node: *node,
-                key: clause.key.to_string(),
+                key: clause.key,
                 value: self.build_load_property(&clause.value)?,
             }),
             Some(NamedEntity::Edge(edge)) => Ok(UpdateStep::SetEdgeProperty {
                 edge: *edge,
-                key: clause.key.to_string(),
+                key: clause.key,
                 value: self.build_load_property(&clause.value)?,
             }),
             None => Err(Error::Todo),
         }
     }
 
-    fn build_delete_update(&mut self, name: &str) -> Result<UpdateStep, Error> {
+    fn build_delete_update(&mut self, name: &'src str) -> Result<UpdateStep<'src>, Error> {
         match self.names.get(name) {
             Some(&NamedEntity::Node(node)) => Ok(UpdateStep::DeleteNode { node }),
             Some(&NamedEntity::Edge(edge)) => Ok(UpdateStep::DeleteEdge { edge }),
@@ -437,8 +432,8 @@ impl<'src> BuildEnv<'src> {
     }
 }
 
-impl QueryPlan {
-    pub fn new(query: &ast::Query) -> Result<QueryPlan, Error> {
+impl<'src> QueryPlan<'src> {
+    pub fn new(query: &'src ast::Query<'src>) -> Result<Self, Error> {
         let mut env = BuildEnv::new();
         let mut steps = vec![];
         let mut updates = vec![];

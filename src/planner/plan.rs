@@ -2,10 +2,10 @@ use crate::store::Property;
 use std::cmp::{Ordering, PartialOrd};
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct QueryPlan {
-    pub steps: Vec<MatchStep>,
-    pub updates: Vec<UpdateStep>,
-    pub returns: Vec<LoadProperty>,
+pub(crate) struct QueryPlan<'src> {
+    pub steps: Vec<MatchStep<'src>>,
+    pub updates: Vec<UpdateStep<'src>>,
+    pub returns: Vec<LoadProperty<'src>>,
 }
 
 /// A step in the logical query plan. The execution model
@@ -15,7 +15,7 @@ pub(crate) struct QueryPlan {
 /// TODO: Describe this more clearly ...
 #[rustfmt::skip]
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum MatchStep {
+pub(crate) enum MatchStep<'src> {
     LoadAnyNode { name: usize },
     LoadOriginNode { name: usize, edge: usize },
     LoadTargetNode { name: usize, edge: usize },
@@ -25,32 +25,32 @@ pub(crate) enum MatchStep {
     LoadTargetEdge { name: usize, node: usize },
     LoadEitherEdge { name: usize, node: usize },
 
-    Filter(Filter),
+    Filter(Filter<'src>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Filter {
-    And(Box<Filter>, Box<Filter>),
-    Or(Box<Filter>, Box<Filter>),
-    Not(Box<Filter>),
+pub(crate) enum Filter<'src> {
+    And(Box<Filter<'src>>, Box<Filter<'src>>),
+    Or(Box<Filter<'src>>, Box<Filter<'src>>),
+    Not(Box<Filter<'src>>),
 
     IsOrigin { node: usize, edge: usize },
     IsTarget { node: usize, edge: usize },
 
-    NodeHasLabel { node: usize, label: String },
-    EdgeHasLabel { edge: usize, label: String },
+    NodeHasLabel { node: usize, label: &'src str },
+    EdgeHasLabel { edge: usize, label: &'src str },
 
-    NodeHasId { node: usize, id: LoadProperty },
-    EdgeHasId { edge: usize, id: LoadProperty },
+    NodeHasId { node: usize, id: LoadProperty<'src> },
+    EdgeHasId { edge: usize, id: LoadProperty<'src> },
 
-    IsTruthy(LoadProperty),
+    IsTruthy(LoadProperty<'src>),
 
-    Eq(LoadProperty, LoadProperty),
-    Lt(LoadProperty, LoadProperty),
-    Gt(LoadProperty, LoadProperty),
+    Eq(LoadProperty<'src>, LoadProperty<'src>),
+    Lt(LoadProperty<'src>, LoadProperty<'src>),
+    Gt(LoadProperty<'src>, LoadProperty<'src>),
 }
 
-impl Filter {
+impl<'src> Filter<'src> {
     pub fn and(a: Self, b: Self) -> Self {
         Self::And(Box::new(a), Box::new(b))
     }
@@ -68,38 +68,38 @@ impl Filter {
 /// ownership here ... (and then these can
 /// be Happy + Copy)
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum LoadProperty {
+pub(crate) enum LoadProperty<'src> {
     Constant(Property),
     IdOfNode { node: usize },
     IdOfEdge { edge: usize },
-    PropertyOfNode { node: usize, key: String },
-    PropertyOfEdge { edge: usize, key: String },
-    Parameter { name: String },
+    PropertyOfNode { node: usize, key: &'src str },
+    PropertyOfEdge { edge: usize, key: &'src str },
+    Parameter { name: &'src str },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum UpdateStep {
+pub(crate) enum UpdateStep<'src> {
     CreateNode {
         name: usize,
-        label: String,
-        properties: Vec<(String, LoadProperty)>,
+        label: &'src str,
+        properties: Vec<(&'src str, LoadProperty<'src>)>,
     },
     CreateEdge {
         name: usize,
-        label: String,
+        label: &'src str,
         origin: usize,
         target: usize,
-        properties: Vec<(String, LoadProperty)>,
+        properties: Vec<(&'src str, LoadProperty<'src>)>,
     },
     SetNodeProperty {
         node: usize,
-        key: String,
-        value: LoadProperty,
+        key: &'src str,
+        value: LoadProperty<'src>,
     },
     SetEdgeProperty {
         edge: usize,
-        key: String,
-        value: LoadProperty,
+        key: &'src str,
+        value: LoadProperty<'src>,
     },
     DeleteNode {
         node: usize,
@@ -109,7 +109,7 @@ pub(crate) enum UpdateStep {
     },
 }
 
-impl PartialOrd for UpdateStep {
+impl<'src> PartialOrd for UpdateStep<'src> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         use UpdateStep::*;
         match (self, other) {

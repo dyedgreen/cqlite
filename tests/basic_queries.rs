@@ -40,11 +40,12 @@ fn run_a_to_b() {
 fn run_a_edge_b() {
     let graph = Graph::open_anon().unwrap();
 
-    let stmt = graph
-        .prepare("CREATE (a:PERSON) CREATE (b:PERSON) CREATE (a) -[:KNOWS]-> (b)")
-        .unwrap();
     let mut txn = graph.mut_txn().unwrap();
-    stmt.execute(&mut txn, ()).unwrap();
+    graph
+        .prepare("CREATE (a:PERSON) CREATE (b:PERSON) CREATE (a) -[:KNOWS]-> (b)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
     txn.commit().unwrap();
 
     let stmt = graph
