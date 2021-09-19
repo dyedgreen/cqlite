@@ -424,7 +424,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                     }
                 }
                 Instruction::CheckEdgeId { jump, edge, id } => {
-                    let edge = &self.node_stack[*edge];
+                    let edge = &self.edge_stack[*edge];
                     let id = self.access_property(*id)?.cast_to_id()?;
                     if edge.id == id {
                         self.current_inst += 1;

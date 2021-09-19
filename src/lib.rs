@@ -1,3 +1,42 @@
+/// GQLite / Cypher Lite (TODO: Name!!!)
+///
+/// # Example
+/// ```
+/// # fn test() -> Result<(), gqlite::Error> {
+/// use gqlite::Graph;
+///
+/// let graph = Graph::open_anon()?;
+///
+/// let create_stmt = graph.prepare(
+///   "
+///   CREATE (a:PERSON { name: 'Peter Parker' })
+///   CREATE (b:PERSON { name: 'Clark Kent' })
+///   CREATE (a) -[e:KNOWS]-> (b)
+///   RETURN ID(e)
+///   "
+/// )?;
+/// let mut txn = graph.mut_txn()?;
+/// let mut query = create_stmt.query(&mut txn, ())?;
+/// let vals = query.step()?.unwrap();
+/// let edge: u64 = vals.get(0)?;
+/// txn.commit()?;
+///
+/// let stmt = graph.prepare(
+///   "
+///   MATCH (p:PERSON) <-[e:KNOWS]- (:PERSON)
+///   WHERE ID(e) = $edge
+///   RETURN p.name
+///   "
+/// )?;
+/// let mut txn = graph.txn()?;
+/// let mut query = stmt.query(&mut txn, ("edge", edge))?;
+/// let vals = query.step()?.unwrap();
+/// let name: String = vals.get(0)?;
+/// assert_eq!("Clark Kent", name);
+/// # Ok(())
+/// # }
+/// # test().unwrap();
+/// ```
 use planner::QueryPlan;
 use runtime::{Program, Status, VirtualMachine};
 use std::{convert::TryInto, path::Path};

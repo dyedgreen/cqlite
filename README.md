@@ -5,35 +5,34 @@ An embedded graph database implemented with Rust. Currently WIP/ DRAFT ...
 ```rust
 use gqlite::Graph;
 
-let graph = Graph::open("database.graph")?;
+let graph = Graph::open_anon()?;
 
 let create_stmt = graph.prepare(
   "
   CREATE (a:PERSON { name: 'Peter Parker' })
   CREATE (b:PERSON { name: 'Clark Kent' })
-  CREATE (a) -[:KNOWS]-> (b)
-  RETURN ID(a), ID(b)
+  CREATE (a) -[e:KNOWS]-> (b)
+  RETURN ID(e)
   "
 )?;
 let mut txn = graph.mut_txn()?;
-let query = create_stmt.query(&mut txn, None)?;
-let vals = query.step()?;
-let id_a: u64 = vals.get(0)?;
-let id_b: u64 = vals.get(1)?;
+let mut query = create_stmt.query(&mut txn, ())?;
+let vals = query.step()?.unwrap();
+let edge: u64 = vals.get(0)?;
 txn.commit()?;
 
-println!("ID(a) = {}, ID(b) = {}", id_a, id_b);
-
-let stmt = grapg.prepare(
+let stmt = graph.prepare(
   "
-  MATCH (p:PERSON) <-[:KNOWS]- (:PERSON)
+  MATCH (p:PERSON) <-[e:KNOWS]- (:PERSON)
+  WHERE ID(e) = $edge
   RETURN p.name
   "
 )?;
 let mut txn = graph.txn()?;
-let query = stmt.query(&mut txn, None)?;
-let vals = query.step()?;
-assert_eq!("Clark Kent".to_string(), vals.get(0)?);
+let mut query = stmt.query(&mut txn, ("edge", edge))?;
+let vals = query.step()?.unwrap();
+let name: String = vals.get(0)?;
+assert_eq!("Clark Kent", name);
 ```
 
 
