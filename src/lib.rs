@@ -89,7 +89,7 @@ impl<'graph> Statement<'graph> {
         txn.0.flush()?;
         Ok(Query {
             stmt: self,
-            vm: VirtualMachine::new(&txn.0, &self.program, params.build()),
+            vm: VirtualMachine::new(&mut txn.0, &self.program, params.build()),
         })
     }
 

@@ -221,7 +221,7 @@ pub(crate) enum Status {
 
 impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     pub fn new(
-        txn: &'txn StoreTxn<'env>,
+        txn: &'txn mut StoreTxn<'env>,
         program: &'prog Program,
         parameters: HashMap<String, Property>,
     ) -> Self {
