@@ -142,3 +142,97 @@ fn match_single_undirected_edge() {
         ]
     );
 }
+
+#[test]
+fn match_single_path() {
+    let graph = create_test_graph();
+
+    let path = graph
+        .prepare("MATCH (a) -> (b) -> (c) RETURN ID(a), ID(b), ID(c)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<(u64, u64, u64)>, _>>()
+        .unwrap();
+
+    assert_eq!(path, vec![(0, 1, 3)]);
+}
+
+#[test]
+fn match_path_with_multiple_clauses() {
+    let graph = create_test_graph();
+
+    let path = graph
+        .prepare("MATCH (a) -> (b) MATCH (b) -> (c) RETURN ID(a), ID(b), ID(c)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<(u64, u64, u64)>, _>>()
+        .unwrap();
+
+    assert_eq!(path, vec![(0, 1, 3)]);
+}
+
+#[test]
+fn match_labeled_nodes() {
+    let graph = create_test_graph();
+
+    let mut nodes = graph
+        .prepare("MATCH (a:PERSON) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![0, 1]);
+
+    let mut nodes = graph
+        .prepare("MATCH (a:STUDENT) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![2]);
+
+    let mut nodes = graph
+        .prepare("MATCH (a:JOURNALIST) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![3]);
+}
+
+#[test]
+fn match_labeled_edges() {
+    let graph = create_test_graph();
+
+    let mut nodes = graph
+        .prepare("MATCH () -[e:IS_A]-> () RETURN ID(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![4, 5]);
+
+    let mut nodes = graph
+        .prepare("MATCH () -[e:KNOWS]-> () RETURN ID(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![6]);
+}
