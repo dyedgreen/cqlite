@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure_call)]
+
 use peg::{error::ParseError, str::LineCol};
 
 pub mod ast;
@@ -152,7 +154,7 @@ peg::parser! {
                 let (origin, target) = match e.direction {
                     Direction::Left => (rhs, lhs),
                     Direction::Right => (lhs, rhs),
-                    Direction::Either => Err("edge must be directed")?,
+                    Direction::Either => return Err("edge must be directed"),
                 };
                 Ok(CreateClause::CreateEdge {
                     name,

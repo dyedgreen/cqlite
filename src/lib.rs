@@ -164,7 +164,7 @@ impl<'graph> Statement<'graph> {
         P: Params,
     {
         let mut query = self.query(txn, params)?;
-        while let Some(_) = query.step()? {}
+        while query.step()?.is_some() {}
         txn.0.flush()?;
         Ok(())
     }
@@ -172,7 +172,7 @@ impl<'graph> Statement<'graph> {
 
 impl<'stmt, 'txn> Query<'stmt, 'txn> {
     #[inline]
-    pub fn step<'query>(&'query mut self) -> Result<Option<Match<'query>>, Error> {
+    pub fn step(&mut self) -> Result<Option<Match>, Error> {
         if self.stmt.program.returns.is_empty() {
             loop {
                 match self.vm.run()? {

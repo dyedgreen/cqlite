@@ -48,13 +48,10 @@ PEG grammar and parser for a subset of the `CYPHER` graph query language
 Transforms a parsed query ast into a logical query plan. (In the future) does some
 optimizations on the query plan.
 
-Finally, this turns the query plan into a sequence of `Instructions` to run in a
-simple byte-code interpreter.
-
 ### Byte-Code Interpreter :: `src/runtime`
 
 Defines a simple 'byte' code (`Instructions`) and can execute those against a given
-database.
+database, as well as generate instructions for a given query plan.
 
 ### Storage Backend :: `src/store`
 

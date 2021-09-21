@@ -11,7 +11,10 @@ impl<E: Borrow<Env>> DynTxn<E> {
     pub fn set_root(&mut self, n: usize, value: u64) -> Result<(), Error> {
         match self {
             DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
-            DynTxn::MutTxn(txn) => Ok(txn.set_root(n, value)),
+            DynTxn::MutTxn(txn) => {
+                txn.set_root(n, value);
+                Ok(())
+            }
         }
     }
 

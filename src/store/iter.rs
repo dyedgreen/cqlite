@@ -4,6 +4,8 @@ use sanakirja::{btree, Env, UnsizedStorable};
 use serde::Deserialize;
 use std::marker::PhantomData;
 
+type BytesIter<'txn, K> =
+    btree::Iter<'txn, DynTxn<&'txn Env>, K, [u8], btree::page_unsized::Page<K, [u8]>>;
 pub(crate) type IndexIter<'txn> =
     btree::Iter<'txn, DynTxn<&'txn Env>, u64, u64, btree::page::Page<u64, u64>>;
 
@@ -17,7 +19,7 @@ where
     K: UnsizedStorable,
     I: Deserialize<'txn>,
 {
-    inner: btree::Iter<'txn, DynTxn<&'txn Env>, K, [u8], btree::page_unsized::Page<K, [u8]>>,
+    inner: BytesIter<'txn, K>,
     _item: PhantomData<&'txn I>,
 }
 
@@ -50,7 +52,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|res| {
-            res.map_err(|err| err.into()).and_then(|(key, bytes)| {
+            res.map_err(|err| err).and_then(|(key, bytes)| {
                 let item = bincode::deserialize(bytes)?;
                 Ok((key, item))
             })

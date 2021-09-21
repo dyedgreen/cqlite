@@ -83,7 +83,7 @@ impl<'src> BuildEnv<'src> {
             ast::Expression::IdOf { name } => match self
                 .names
                 .get(name)
-                .ok_or(Error::UnknownIdentifier(name.to_string()))?
+                .ok_or_else(|| Error::UnknownIdentifier(name.to_string()))?
             {
                 NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
                 NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
@@ -92,7 +92,7 @@ impl<'src> BuildEnv<'src> {
                 match self
                     .names
                     .get(name)
-                    .ok_or(Error::UnknownIdentifier(name.to_string()))?
+                    .ok_or_else(|| Error::UnknownIdentifier(name.to_string()))?
                 {
                     NamedEntity::Node(node) => LoadProperty::PropertyOfNode { node: *node, key },
                     NamedEntity::Edge(edge) => LoadProperty::PropertyOfEdge { edge: *edge, key },
@@ -137,7 +137,7 @@ impl<'src> BuildEnv<'src> {
             ast::Condition::IdEq(name, value) => match self
                 .names
                 .get(name)
-                .ok_or(Error::UnknownIdentifier(name.to_string()))?
+                .ok_or_else(|| Error::UnknownIdentifier(name.to_string()))?
             {
                 NamedEntity::Node(node) => Filter::NodeHasId {
                     node: *node,
@@ -403,13 +403,13 @@ impl<'src> BuildEnv<'src> {
                     .map(|n| self.create_edge(n))
                     .transpose()?
                     .unwrap_or_else(|| self.next_name()),
-                label: label,
+                label,
                 origin: self
                     .get_node(origin)?
-                    .ok_or(Error::UnknownIdentifier(origin.to_string()))?,
+                    .ok_or_else(|| Error::UnknownIdentifier(origin.to_string()))?,
                 target: self
                     .get_node(target)?
-                    .ok_or(Error::UnknownIdentifier(target.to_string()))?,
+                    .ok_or_else(|| Error::UnknownIdentifier(target.to_string()))?,
                 properties: properties
                     .iter()
                     .map(|(key, expr)| -> Result<_, Error> {

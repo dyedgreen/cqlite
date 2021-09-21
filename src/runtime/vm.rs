@@ -303,23 +303,23 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::IterNodes => {
                     self.node_iters
-                        .push(NodeIter::new(&self.txn, &self.txn.nodes, None)?);
+                        .push(NodeIter::new(self.txn, &self.txn.nodes, None)?);
                     self.current_inst += 1;
                 }
 
                 Instruction::IterOriginEdges { node } => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::origins(&self.txn, node.id)?);
+                    self.edge_iters.push(EdgeIter::origins(self.txn, node.id)?);
                     self.current_inst += 1;
                 }
                 Instruction::IterTargetEdges { node } => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::targets(&self.txn, node.id)?);
+                    self.edge_iters.push(EdgeIter::targets(self.txn, node.id)?);
                     self.current_inst += 1;
                 }
                 Instruction::IterBothEdges { node } => {
                     let node = &self.node_stack[*node];
-                    self.edge_iters.push(EdgeIter::both(&self.txn, node.id)?);
+                    self.edge_iters.push(EdgeIter::both(self.txn, node.id)?);
                     self.current_inst += 1;
                 }
 

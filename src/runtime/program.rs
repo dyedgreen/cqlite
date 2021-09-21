@@ -56,7 +56,7 @@ impl CompileEnv {
     }
 
     fn get_stack_idx(&self, name: usize) -> Result<usize, Error> {
-        self.names.get(&name).map(|idx| *idx).ok_or(Error::Internal)
+        self.names.get(&name).copied().ok_or(Error::Internal)
     }
 
     fn adjust_jumps(instructions: &mut [Instruction], from: usize, to: usize) {
@@ -473,7 +473,7 @@ impl Program {
     /// Compile a `QueryPlan` into a `Program`.
     pub fn new(plan: &QueryPlan) -> Result<Program, Error> {
         let mut env = CompileEnv::new();
-        env.compile_step(&plan, &plan.steps)?;
+        env.compile_step(plan, &plan.steps)?;
         env.instructions.push(Instruction::Halt);
         Ok(Program {
             instructions: env.instructions,

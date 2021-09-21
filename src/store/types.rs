@@ -124,12 +124,12 @@ impl Property {
 }
 
 impl<'prop> PropertyRef<'prop> {
-    pub(crate) fn to_owned(&self) -> Property {
+    pub(crate) fn to_owned(self) -> Property {
         match self {
-            PropertyRef::Id(id) => Property::Id(*id),
-            PropertyRef::Integer(num) => Property::Integer(*num),
-            PropertyRef::Real(num) => Property::Real(*num),
-            PropertyRef::Boolean(val) => Property::Boolean(*val),
+            PropertyRef::Id(id) => Property::Id(id),
+            PropertyRef::Integer(num) => Property::Integer(num),
+            PropertyRef::Real(num) => Property::Real(num),
+            PropertyRef::Boolean(val) => Property::Boolean(val),
             PropertyRef::Text(text) => Property::Text(text.to_string()),
             PropertyRef::Blob(bytes) => Property::Blob(bytes.to_vec()),
             PropertyRef::Null => Property::Null,
@@ -172,9 +172,9 @@ impl<'prop> PropertyRef<'prop> {
 
     pub(crate) fn cast_to_id(&self) -> Result<u64, Error> {
         use PropertyRef::*;
-        match self {
-            &Id(val) => Ok(val),
-            &Integer(val) => Ok(val.try_into().map_err(|_| Error::TypeMismatch)?),
+        match *self {
+            Id(val) => Ok(val),
+            Integer(val) => Ok(val.try_into().map_err(|_| Error::TypeMismatch)?),
             _ => Err(Error::TypeMismatch),
         }
     }

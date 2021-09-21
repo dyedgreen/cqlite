@@ -137,7 +137,7 @@ impl<'e> StoreTxn<'e> {
         let entry = btree::get(&self.txn, &self.nodes, &id, None)?;
         if let Some((&entry_id, bytes)) = entry {
             if entry_id == id {
-                let node = bincode::deserialize(bytes.as_ref())?;
+                let node = bincode::deserialize(bytes)?;
                 Ok(Some(node))
             } else {
                 Ok(None)
@@ -151,7 +151,7 @@ impl<'e> StoreTxn<'e> {
         let entry = btree::get(&self.txn, &self.edges, &id, None)?;
         if let Some((&entry_id, bytes)) = entry {
             if entry_id == id {
-                let node = bincode::deserialize(bytes.as_ref())?;
+                let node = bincode::deserialize(bytes)?;
                 Ok(Some(node))
             } else {
                 Ok(None)
