@@ -56,6 +56,8 @@ pub enum Error {
     TypeMismatch,
 
     /// The return index was out of bounds.
+    #[error("Index out of bounds")]
+    IndexOutOfBounds,
 
     /// Attempted to load a missing node.
     #[error("Missing node")]

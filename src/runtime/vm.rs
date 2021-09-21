@@ -261,7 +261,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     }
 
     pub fn access_return(&self, access: usize) -> Result<Property, Error> {
-        match &self.returns[access] {
+        match self.returns.get(access).ok_or(Error::IndexOutOfBounds)? {
             Access::Constant(val) => Ok(val.clone()),
             Access::NodeId(node) => Ok(Property::Id(self.node_stack[*node].id())),
             Access::EdgeId(edge) => Ok(Property::Id(self.edge_stack[*edge].id())),
