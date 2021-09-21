@@ -154,6 +154,7 @@ impl<'prop> PropertyRef<'prop> {
             (Real(lhs), Real(rhs)) => lhs.partial_cmp(rhs),
             (Real(lhs), Integer(rhs)) => lhs.partial_cmp(&(*rhs as f64)),
             (Integer(lhs), Real(rhs)) => (*lhs as f64).partial_cmp(rhs),
+            (Text(lhs), Text(rhs)) => Some(lhs.cmp(rhs)),
             _ => None,
         }
     }

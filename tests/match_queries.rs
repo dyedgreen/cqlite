@@ -15,7 +15,7 @@ fn create_test_graph() -> Graph {
             CREATE (peter) -[:IS_A]-> (student)
             CREATE (clark) -[:IS_A]-> (journalist)
 
-            CREATE (peter) -[:KNOWS]-> (clark)
+            CREATE (peter) -[:KNOWS { since: '24.08.2019' }]-> (clark)
             ",
         )
         .unwrap()
@@ -235,4 +235,54 @@ fn match_labeled_edges() {
         .unwrap();
     nodes.sort_unstable();
     assert_eq!(nodes, vec![6]);
+}
+
+#[test]
+fn match_nodes_with_properties() {
+    let graph = create_test_graph();
+
+    let node: u64 = graph
+        .prepare("MATCH (a { name: 'Peter Parker' }) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(node, 0);
+
+    let node: u64 = graph
+        .prepare("MATCH (a { age: 42 }) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(node, 1);
+
+    let node: u64 = graph
+        .prepare("MATCH (a { name: 'Peter Parker', height: 176.5, age: 21 }) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(node, 0);
+}
+
+#[test]
+fn match_edges_with_properties() {
+    let graph = create_test_graph();
+
+    let edge: u64 = graph
+        .prepare("MATCH () -[e { since: '24.08.2019' }]-> () RETURN ID(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(edge, 6);
 }

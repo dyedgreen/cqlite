@@ -54,7 +54,6 @@ pub enum Error {
     /// Attempted type conversion failed.
     #[error("Type mismatch")]
     TypeMismatch,
-
     /// The return index was out of bounds.
     #[error("Index out of bounds")]
     IndexOutOfBounds,
