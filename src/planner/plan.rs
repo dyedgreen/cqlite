@@ -72,6 +72,8 @@ pub(crate) enum LoadProperty<'src> {
     Constant(Property),
     IdOfNode { node: usize },
     IdOfEdge { edge: usize },
+    LabelOfNode { node: usize },
+    LabelOfEdge { edge: usize },
     PropertyOfNode { node: usize, key: &'src str },
     PropertyOfEdge { edge: usize, key: &'src str },
     Parameter { name: &'src str },

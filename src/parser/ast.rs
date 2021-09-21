@@ -174,17 +174,20 @@ pub enum Literal<'src> {
 pub enum Expression<'src> {
     Literal(Literal<'src>),
     IdOf { name: &'src str },
+    LabelOf { name: &'src str },
     Property { name: &'src str, key: &'src str },
     Parameter(&'src str),
 }
 
 impl<'src> Expression<'src> {
-    #[allow(dead_code)]
     pub fn id_of(name: &'src str) -> Self {
         Self::IdOf { name }
     }
 
-    #[allow(dead_code)]
+    pub fn label_of(name: &'src str) -> Self {
+        Self::LabelOf { name }
+    }
+
     pub fn property(name: &'src str, key: &'src str) -> Self {
         Self::Property { name, key }
     }

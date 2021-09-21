@@ -88,6 +88,14 @@ impl<'src> BuildEnv<'src> {
                 NamedEntity::Node(node) => LoadProperty::IdOfNode { node: *node },
                 NamedEntity::Edge(edge) => LoadProperty::IdOfEdge { edge: *edge },
             },
+            ast::Expression::LabelOf { name } => match self
+                .names
+                .get(name)
+                .ok_or_else(|| Error::UnknownIdentifier(name.to_string()))?
+            {
+                NamedEntity::Node(node) => LoadProperty::LabelOfNode { node: *node },
+                NamedEntity::Edge(edge) => LoadProperty::LabelOfEdge { edge: *edge },
+            },
             ast::Expression::Property { name, key } => {
                 match self
                     .names

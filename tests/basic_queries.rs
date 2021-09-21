@@ -440,3 +440,26 @@ fn run_bad_delete() {
     let mut txn = graph.mut_txn().unwrap();
     assert!(del_stmt.execute(&mut txn, ()).is_err());
 }
+
+#[test]
+fn run_return_label() {
+    let graph = Graph::open_anon().unwrap();
+
+    let stmt = graph
+        .prepare("CREATE (a:PERSON) CREATE (a) -[:IS]-> (a)")
+        .unwrap();
+    let mut txn = graph.mut_txn().unwrap();
+    stmt.execute(&mut txn, ()).unwrap();
+    txn.commit().unwrap();
+
+    let labels: Vec<(String, String)> = graph
+        .prepare("MATCH (a) -[e]-> (a) RETURN LABEL ( a ), LABEL(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(labels, vec![("PERSON".into(), "IS".into())]);
+}

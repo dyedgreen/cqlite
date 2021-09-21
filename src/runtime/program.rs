@@ -113,6 +113,14 @@ impl CompileEnv {
                 let edge = self.get_stack_idx(*edge)?;
                 Access::EdgeId(edge)
             }
+            LoadProperty::LabelOfNode { node } => {
+                let node = self.get_stack_idx(*node)?;
+                Access::NodeLabel(node)
+            }
+            LoadProperty::LabelOfEdge { edge } => {
+                let edge = self.get_stack_idx(*edge)?;
+                Access::EdgeLabel(edge)
+            }
             LoadProperty::PropertyOfNode { node, key } => {
                 let node = self.get_stack_idx(*node)?;
                 Access::NodeProperty(node, key.to_string())

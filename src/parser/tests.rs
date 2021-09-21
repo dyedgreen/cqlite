@@ -4,7 +4,7 @@ use ast::*;
 #[test]
 fn match_clauses_work() {
     assert_eq!(
-        cypher::query("MATCH (a) - (b) RETURN a.name "),
+        cypher::query("MATCH (a) - (b) RETURN a.name, LABEL(a) "),
         Ok(Query {
             match_clauses: vec![MatchClause {
                 start: Node::with_annotation(Annotation::with_name("a")),
@@ -17,7 +17,7 @@ fn match_clauses_work() {
             create_clauses: vec![],
             set_clauses: vec![],
             delete_clauses: vec![],
-            return_clause: vec![Expression::property("a", "name")],
+            return_clause: vec![Expression::property("a", "name"), Expression::label_of("a")],
         })
     );
     assert_eq!(

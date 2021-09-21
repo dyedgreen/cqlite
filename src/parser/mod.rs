@@ -24,6 +24,7 @@ peg::parser! {
         rule kw_or()        = "OR"
         rule kw_not()       = "NOT"
         rule kw_id()        = "ID"
+        rule kw_label()     = "LABEL"
 
         rule _()
             = [' ']
@@ -68,8 +69,9 @@ peg::parser! {
         rule expression() -> Expression<'input>
             = "$" name:ident() { Expression::Parameter(name) }
             / l:literal() { Expression::Literal(l) }
-            / kw_id() _* "(" _* n:ident() _* ")" { Expression::IdOf { name: n } }
-            / p:property() { Expression::Property { name: p.0, key: p.1 } }
+            / kw_id() _* "(" _* n:ident() _* ")" { Expression::id_of(n) }
+            / kw_label() _* "(" _* n:ident() _* ")" { Expression::label_of(n) }
+            / p:property() { Expression::property(p.0, p.1) }
 
         // e.g. 'hello_world', 'Rust', 'HAS_PROPERTY'
         rule ident() -> &'input str

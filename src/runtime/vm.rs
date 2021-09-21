@@ -208,6 +208,8 @@ pub(crate) enum Access {
     Constant(Property),
     NodeId(usize),
     EdgeId(usize),
+    NodeLabel(usize),
+    EdgeLabel(usize),
     NodeProperty(usize, String),
     EdgeProperty(usize, String),
     Parameter(String),
@@ -246,6 +248,8 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             Access::Constant(val) => Ok(val.as_ref()),
             Access::NodeId(node) => Ok(PropertyRef::Id(self.node_stack[*node].id())),
             Access::EdgeId(edge) => Ok(PropertyRef::Id(self.edge_stack[*edge].id())),
+            Access::NodeLabel(node) => Ok(PropertyRef::Text(self.node_stack[*node].label())),
+            Access::EdgeLabel(edge) => Ok(PropertyRef::Text(self.edge_stack[*edge].label())),
             Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key).as_ref()),
             Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key).as_ref()),
             Access::Parameter(name) => Ok(self
@@ -261,6 +265,12 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
             Access::Constant(val) => Ok(val.clone()),
             Access::NodeId(node) => Ok(Property::Id(self.node_stack[*node].id())),
             Access::EdgeId(edge) => Ok(Property::Id(self.edge_stack[*edge].id())),
+            Access::NodeLabel(node) => {
+                Ok(Property::Text(self.node_stack[*node].label().to_string()))
+            }
+            Access::EdgeLabel(edge) => {
+                Ok(Property::Text(self.edge_stack[*edge].label().to_string()))
+            }
             Access::NodeProperty(node, key) => {
                 let node = &self.node_stack[*node];
                 Ok(self
