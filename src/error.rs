@@ -26,7 +26,7 @@ pub enum Error {
     /// Attempted to write to a read
     /// only transaction.
     #[error("Read only write attempt")]
-    ReadOnlyWriteAttempt,
+    ReadOnlyWrite,
 
     /// CYPHER syntax error.
     #[error("Invalid syntax at line {line}, column {column}: {expected}")]
@@ -68,7 +68,7 @@ pub enum Error {
     /// still connected with the rest of the
     /// graph.
     #[error("Attempt to delete connected node")]
-    DeleteConnectedAttempt,
+    DeleteConnected,
 }
 
 impl From<SanakirjaError> for Error {

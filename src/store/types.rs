@@ -219,6 +219,22 @@ macro_rules! try_from {
     };
 }
 
+macro_rules! from {
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for Property {
+            fn from(value: $type) -> Self {
+                Property::$variant(value.into())
+            }
+        }
+
+        impl From<Option<$type>> for Property {
+            fn from(value: Option<$type>) -> Self {
+                value.map(|v| v.into()).unwrap_or(Property::Null)
+            }
+        }
+    };
+}
+
 try_from!(u64, Id);
 try_from!(i64, Integer);
 try_from!(f64, Real);
@@ -226,14 +242,30 @@ try_from!(bool, Boolean);
 try_from!(String, Text);
 try_from!(Vec<u8>, Blob);
 
-impl From<i32> for Property {
-    fn from(value: i32) -> Self {
-        Property::Integer(value.into())
+from!(i32, Integer);
+from!(&str, Text);
+from!(&[u8], Blob);
+
+impl<const N: usize> From<[u8; N]> for Property {
+    fn from(value: [u8; N]) -> Self {
+        Property::Blob(value.into())
     }
 }
 
-impl From<Option<i32>> for Property {
-    fn from(value: Option<i32>) -> Self {
+impl<const N: usize> From<Option<[u8; N]>> for Property {
+    fn from(value: Option<[u8; N]>) -> Self {
+        value.map(|v| v.into()).unwrap_or(Property::Null)
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for Property {
+    fn from(value: &[u8; N]) -> Self {
+        Property::Blob(value.to_vec())
+    }
+}
+
+impl<const N: usize> From<Option<&[u8; N]>> for Property {
+    fn from(value: Option<&[u8; N]>) -> Self {
         value.map(|v| v.into()).unwrap_or(Property::Null)
     }
 }

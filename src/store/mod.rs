@@ -188,7 +188,7 @@ impl<'e> StoreTxn<'e> {
             .map(|(k, _)| *k == node)
             .unwrap_or(false);
         if has_origin || has_target {
-            Err(Error::DeleteConnectedAttempt)
+            Err(Error::DeleteConnected)
         } else {
             btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
             Ok(())
@@ -240,7 +240,7 @@ impl<'e> StoreTxn<'e> {
             self.updates.try_write()?.push(update);
             Ok(())
         } else {
-            Err(Error::ReadOnlyWriteAttempt)
+            Err(Error::ReadOnlyWrite)
         }
     }
 

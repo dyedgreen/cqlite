@@ -10,7 +10,7 @@ pub(crate) enum DynTxn<E: Borrow<Env>> {
 impl<E: Borrow<Env>> DynTxn<E> {
     pub fn set_root(&mut self, n: usize, value: u64) -> Result<(), Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => {
                 txn.set_root(n, value);
                 Ok(())
@@ -20,7 +20,7 @@ impl<E: Borrow<Env>> DynTxn<E> {
 
     pub fn commit(self) -> Result<(), Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.commit()?),
         }
     }
@@ -80,28 +80,28 @@ impl<E: Borrow<Env>> RootPage for DynTxn<E> {
 impl<E: Borrow<Env>> AllocPage for DynTxn<E> {
     fn alloc_page(&mut self) -> Result<sanakirja::MutPage, Self::Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.alloc_page()?),
         }
     }
 
     fn incr_rc(&mut self, off: u64) -> Result<usize, Self::Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.incr_rc(off)?),
         }
     }
 
     fn decr_rc(&mut self, off: u64) -> Result<usize, Self::Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.decr_rc(off)?),
         }
     }
 
     fn decr_rc_owned(&mut self, off: u64) -> Result<usize, Self::Error> {
         match self {
-            DynTxn::Txn(_) => Err(Error::ReadOnlyWriteAttempt),
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.decr_rc_owned(off)?),
         }
     }
