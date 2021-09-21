@@ -51,6 +51,53 @@ fn match_all_nodes() {
 }
 
 #[test]
+fn match_multiple_nodes() {
+    let graph = create_test_graph();
+
+    let mut nodes = graph
+        .prepare("MATCH (a) MATCH (b) RETURN ID(a), ID(b)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<(u64, u64)>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+
+    assert_eq!(
+        nodes,
+        vec![
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (1, 0),
+            (1, 1),
+            (1, 2),
+            (1, 3),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+            (2, 3),
+            (3, 0),
+            (3, 1),
+            (3, 2),
+            (3, 3),
+        ],
+    );
+
+    let nodes = graph
+        .prepare("MATCH () MATCH () MATCH () RETURN NULL")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |_| Ok(()))
+        .unwrap()
+        .collect::<Result<Vec<()>, _>>()
+        .unwrap();
+    assert_eq!(nodes.len(), 4 * 4 * 4);
+}
+
+#[test]
 fn match_single_directed_edge() {
     let graph = create_test_graph();
 

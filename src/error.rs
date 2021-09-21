@@ -29,7 +29,7 @@ pub enum Error {
     ReadOnlyWriteAttempt,
 
     /// CYPHER syntax error.
-    #[error("Invalid syntax")]
+    #[error("Invalid syntax at line {line}, column {column}: {expected}")]
     Syntax {
         line: usize,
         column: usize,
@@ -54,6 +54,8 @@ pub enum Error {
     /// Attempted type conversion failed.
     #[error("Type mismatch")]
     TypeMismatch,
+
+    /// The return index was out of bounds.
 
     /// Attempted to load a missing node.
     #[error("Missing node")]

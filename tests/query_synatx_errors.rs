@@ -4,7 +4,7 @@ macro_rules! assert_err {
     ($expr:expr, $err:pat) => {
         match $expr {
             $err => (),
-            _ => assert!(false, "Unexpected {:?}", $expr.err().unwrap()),
+            _ => assert!(false, "Unexpected {}", $expr.err().unwrap()),
         }
     };
 }
