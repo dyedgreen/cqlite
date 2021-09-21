@@ -29,51 +29,40 @@ fn create_test_graph() -> Graph {
 fn match_all_nodes() {
     let graph = create_test_graph();
 
-    let stmt = graph.prepare("MATCH (a) RETURN ID(a), a.name").unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, ()).unwrap();
+    let mut nodes = graph
+        .prepare("MATCH (a) RETURN ID(a), a.name")
+        .unwrap()
+        .query_map(&mut txn, (), |m| Ok((m.get(0)?, m.get(1)?)))
+        .unwrap()
+        .collect::<Result<Vec<(u64, Option<String>)>, _>>()
+        .unwrap();
+    nodes.sort();
 
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(0u64, m.get(0).unwrap());
-    assert_eq!("Peter Parker", m.get::<String, _>(1).unwrap());
-
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(1u64, m.get(0).unwrap());
-    assert_eq!("Clark Kent", m.get::<String, _>(1).unwrap());
-
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(2u64, m.get(0).unwrap());
-
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(3u64, m.get(0).unwrap());
-
-    assert!(query.step().unwrap().is_none());
+    assert_eq!(
+        nodes,
+        vec![
+            (0, Some("Peter Parker".into())),
+            (1, Some("Clark Kent".into())),
+            (2, None),
+            (3, None)
+        ],
+    );
 }
 
 #[test]
 fn match_all_edges() {
     let graph = create_test_graph();
 
-    let stmt = graph
-        .prepare("MATCH (a) -[e]-> (b) RETURN ID(a), ID(e), ID(b)")
-        .unwrap();
     let mut txn = graph.txn().unwrap();
-    let mut query = stmt.query(&mut txn, ()).unwrap();
+    let mut nodes = graph
+        .prepare("MATCH (a) -[e]-> (b) RETURN ID(a), ID(b), ID(e)")
+        .unwrap()
+        .query_map(&mut txn, (), |m| Ok((m.get(0)?, m.get(1)?, m.get(2)?)))
+        .unwrap()
+        .collect::<Result<Vec<(u64, u64, u64)>, _>>()
+        .unwrap();
+    nodes.sort();
 
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(0u64, m.get(0).unwrap());
-    assert_eq!(4u64, m.get(1).unwrap());
-    assert_eq!(2u64, m.get(2).unwrap());
-
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(0u64, m.get(0).unwrap());
-    assert_eq!(6u64, m.get(1).unwrap());
-    assert_eq!(1u64, m.get(2).unwrap());
-
-    let m = query.step().unwrap().unwrap();
-    assert_eq!(1u64, m.get(0).unwrap());
-    assert_eq!(5u64, m.get(1).unwrap());
-    assert_eq!(3u64, m.get(2).unwrap());
-
-    assert!(query.step().unwrap().is_none());
+    assert_eq!(nodes, vec![(0, 1, 6), (0, 2, 4), (1, 3, 5),],);
 }

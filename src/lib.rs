@@ -82,6 +82,12 @@ pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
 }
 
+/// TODO: A query iterator
+pub struct MappedQuery<'stmt, 'txn, F> {
+    query: Query<'stmt, 'txn>,
+    map: F,
+}
+
 impl Graph {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let store = Store::open(path)?;
@@ -133,6 +139,22 @@ impl<'graph> Statement<'graph> {
         })
     }
 
+    pub fn query_map<'stmt, 'txn, T, P, F>(
+        &'stmt self,
+        txn: &'txn mut Txn<'graph>,
+        params: P,
+        map: F,
+    ) -> Result<MappedQuery<'stmt, 'txn, F>, Error>
+    where
+        P: Params,
+        F: FnMut(Match<'_>) -> Result<T, Error>,
+    {
+        Ok(MappedQuery {
+            query: self.query(txn, params)?,
+            map,
+        })
+    }
+
     pub fn execute<'stmt, 'txn, P>(
         &'stmt self,
         txn: &'txn mut Txn<'graph>,
@@ -174,5 +196,18 @@ impl<'query> Match<'query> {
         Error: From<E>,
     {
         Ok(self.query.vm.access_return(idx)?.try_into()?)
+    }
+}
+
+impl<'stmt, 'txn, T, F> Iterator for MappedQuery<'stmt, 'txn, F>
+where
+    F: FnMut(Match<'_>) -> Result<T, Error>,
+{
+    type Item = Result<T, Error>;
+
+    fn next(&mut self) -> Option<Result<T, Error>> {
+        let query = &mut self.query;
+        let map = &mut self.map;
+        query.step().transpose().map(|res| res.and_then(map))
     }
 }

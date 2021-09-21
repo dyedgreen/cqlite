@@ -66,10 +66,6 @@ pub enum Error {
     /// graph.
     #[error("Attempt to delete connected node")]
     DeleteConnectedAttempt,
-
-    #[error("TODO")]
-    #[deprecated]
-    Todo,
 }
 
 impl From<SanakirjaError> for Error {
