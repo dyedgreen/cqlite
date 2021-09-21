@@ -1,5 +1,7 @@
 # Cypher Lite / GQLite
 
+[![CI](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml)
+
 An embedded graph database implemented with Rust. Currently WIP/ DRAFT ...
 
 ```rust
