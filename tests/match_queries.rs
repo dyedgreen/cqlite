@@ -178,6 +178,23 @@ fn match_path_with_multiple_clauses() {
 }
 
 #[test]
+fn match_long_path() {
+    let graph = create_test_graph();
+
+    let mut nodes: Vec<(u64, u64, u64, u64)> = graph
+        .prepare("MATCH (s) <- (p) -> (c) -> (j) RETURN ID(s), ID(p), ID(c), ID(j)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?, m.get(3)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, vec![(1, 0, 1, 3), (2, 0, 1, 3)]);
+}
+
+#[test]
 fn match_labeled_nodes() {
     let graph = create_test_graph();
 
