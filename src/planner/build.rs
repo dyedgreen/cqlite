@@ -45,8 +45,9 @@ impl<'src> BuildEnv<'src> {
 
     fn create_node(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
-            Some(NamedEntity::Node(name)) => Ok(*name),
-            Some(NamedEntity::Edge(_)) => Err(Error::IdentifierExists(name.to_string())),
+            Some(NamedEntity::Node(_)) | Some(NamedEntity::Edge(_)) => {
+                Err(Error::IdentifierExists(name.to_string()))
+            }
             None => {
                 let next_name = self.next_name();
                 self.names.insert(name, NamedEntity::Node(next_name));
@@ -57,8 +58,9 @@ impl<'src> BuildEnv<'src> {
 
     fn create_edge(&mut self, name: &'src str) -> Result<usize, Error> {
         match self.names.get(&name) {
-            Some(NamedEntity::Node(_)) => Err(Error::IdentifierExists(name.to_string())),
-            Some(NamedEntity::Edge(name)) => Ok(*name),
+            Some(NamedEntity::Node(_)) | Some(NamedEntity::Edge(_)) => {
+                Err(Error::IdentifierExists(name.to_string()))
+            }
             None => {
                 let next_name = self.next_name();
                 self.names.insert(name, NamedEntity::Edge(next_name));

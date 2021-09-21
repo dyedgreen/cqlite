@@ -51,18 +51,47 @@ fn match_all_nodes() {
 }
 
 #[test]
-fn match_all_edges() {
+fn match_single_directed_edge() {
     let graph = create_test_graph();
 
-    let mut txn = graph.txn().unwrap();
-    let mut nodes = graph
+    let mut paths = graph
         .prepare("MATCH (a) -[e]-> (b) RETURN ID(a), ID(b), ID(e)")
         .unwrap()
-        .query_map(&mut txn, (), |m| Ok((m.get(0)?, m.get(1)?, m.get(2)?)))
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
         .unwrap()
         .collect::<Result<Vec<(u64, u64, u64)>, _>>()
         .unwrap();
-    nodes.sort();
+    paths.sort_unstable();
 
-    assert_eq!(nodes, vec![(0, 1, 6), (0, 2, 4), (1, 3, 5),],);
+    assert_eq!(paths, vec![(0, 1, 6), (0, 2, 4), (1, 3, 5),],);
+}
+
+#[test]
+fn match_single_undirected_edge() {
+    let graph = create_test_graph();
+
+    let mut paths = graph
+        .prepare("MATCH (a) -[e]- (b) RETURN ID(a), ID(b), ID(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<(u64, u64, u64)>, _>>()
+        .unwrap();
+    paths.sort_unstable();
+
+    assert_eq!(
+        paths,
+        vec![
+            (0, 1, 6),
+            (0, 2, 4),
+            (1, 0, 6),
+            (1, 3, 5),
+            (2, 0, 4),
+            (3, 1, 5)
+        ]
+    );
 }
