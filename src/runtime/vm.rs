@@ -426,20 +426,16 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
 
                 Instruction::CheckNodeId { jump, node, id } => {
                     let node = &self.node_stack[*node];
-                    let id = self.access_property(*id)?.cast_to_id()?;
-                    if node.id == id {
-                        self.current_inst += 1;
-                    } else {
-                        self.current_inst = *jump;
+                    match self.access_property(*id)?.cast_to_id() {
+                        Ok(id) if id == node.id => self.current_inst += 1,
+                        Ok(_) | Err(_) => self.current_inst = *jump,
                     }
                 }
                 Instruction::CheckEdgeId { jump, edge, id } => {
                     let edge = &self.edge_stack[*edge];
-                    let id = self.access_property(*id)?.cast_to_id()?;
-                    if edge.id == id {
-                        self.current_inst += 1;
-                    } else {
-                        self.current_inst = *jump;
+                    match self.access_property(*id)?.cast_to_id() {
+                        Ok(id) if id == edge.id => self.current_inst += 1,
+                        Ok(_) | Err(_) => self.current_inst = *jump,
                     }
                 }
 
