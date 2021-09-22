@@ -11,28 +11,28 @@ let graph = Graph::open_anon()?;
 
 let mut txn = graph.mut_txn()?;
 let edge: u64 = graph.prepare(
-    "
-    CREATE (a:PERSON { name: 'Peter Parker' })
-    CREATE (b:PERSON { name: 'Clark Kent' })
-    CREATE (a) -[e:KNOWS]-> (b)
-    RETURN ID(e)
-    "
-  )?
-  .query_map(&mut txn, (), |m| m.get(0))?
-  .next()
-  .unwrap()?;
+        "
+        CREATE (a:PERSON { name: 'Peter Parker' })
+        CREATE (b:PERSON { name: 'Clark Kent' })
+        CREATE (a) -[e:KNOWS]-> (b)
+        RETURN ID(e)
+        "
+    )?
+    .query_map(&mut txn, (), |m| m.get(0))?
+    .next()
+    .unwrap()?;
 txn.commit()?;
 
 let name: String = graph.prepare(
-    "
-    MATCH (p:PERSON) <-[e:KNOWS]- (:PERSON)
-    WHERE ID(e) = $edge
-    RETURN p.name
-    "
-  )?
-  .query_map(&mut graph.txn()?, ("edge", edge), |m| m.get(0))?
-  .next()
-  .unwrap()?;
+        "
+        MATCH (p:PERSON) <-[e:KNOWS]- (:PERSON)
+        WHERE ID(e) = $edge
+        RETURN p.name
+        "
+    )?
+    .query_map(&mut graph.txn()?, ("edge", edge), |m| m.get(0))?
+    .next()
+    .unwrap()?;
 assert_eq!("Clark Kent", name);
 ```
 
