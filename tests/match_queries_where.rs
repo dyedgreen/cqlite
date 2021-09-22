@@ -15,9 +15,9 @@ fn create_test_graph() -> Graph {
 
             CREATE (peter) -[:IS_A]-> (student)
             CREATE (clark) -[:IS_A]-> (journalist)
-            CREATE (stacey) -[:IS_A { since: '01.09.2018' }]-> (student)
+            CREATE (stacey) -[:IS_A { since: '2018.09.01' }]-> (student)
 
-            CREATE (peter) -[:KNOWS { since: '24.08.2019' }]-> (clark)
+            CREATE (peter) -[:KNOWS { since: '2019.08.24' }]-> (clark)
             CREATE (stacey) -[:WATCHED_MOVIE_ABOUT { location: 'London' }]-> (peter)
             ",
         )
@@ -61,6 +61,31 @@ fn match_where_node_id_eq() {
             .unwrap();
         assert_eq!(nodes, vec!["Stacey"]);
     }
+}
+
+#[test]
+fn match_where_node_label_eq() {
+    let graph = create_test_graph();
+
+    let mut nodes_match = graph
+        .prepare("MATCH (a:PERSON) RETURN a.name")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<String>, _>>()
+        .unwrap();
+    nodes_match.sort();
+    let mut nodes_where = graph
+        .prepare("MATCH (a) WHERE LABEL(a) = 'PERSON' RETURN a.name")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<String>, _>>()
+        .unwrap();
+    nodes_where.sort();
+
+    assert_eq!(nodes_match, nodes_where);
+    assert_eq!(nodes_where, vec!["Clark Kent", "Peter Parker", "Stacey"]);
 }
 
 #[test]
@@ -230,6 +255,22 @@ fn match_where_edge_prop_eq() {
         .collect::<Result<_, _>>()
         .unwrap();
     assert_eq!(path, vec![(0, 9, 2)]);
+}
+
+#[test]
+fn match_where_edge_prop_gt() {
+    let graph = create_test_graph();
+
+    let path: Vec<(u64, u64, u64)> = graph
+        .prepare("MATCH (a) -[e]-> (b) WHERE e.since > '2019' RETURN ID(a), ID(e), ID(b)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(path, vec![(0, 8, 1)]);
 }
 
 #[test]
