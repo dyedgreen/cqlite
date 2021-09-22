@@ -278,7 +278,13 @@ fn match_where_a_or_b() {
     let graph = create_test_graph();
 
     let mut paths: Vec<(u64, u64, u64)> = graph
-        .prepare("MATCH (a) -[e]-> (b) WHERE a.fictional = TRUE OR b.fictional = TRUE RETURN ID(a), ID(e), ID(b)")
+        .prepare(
+            "
+            MATCH (a) -[e]-> (b)
+            WHERE a.fictional = TRUE OR b.fictional = TRUE
+            RETURN ID(a), ID(e), ID(b)
+            ",
+        )
         .unwrap()
         .query_map(&mut graph.txn().unwrap(), (), |m| {
             Ok((m.get(0)?, m.get(1)?, m.get(2)?))
