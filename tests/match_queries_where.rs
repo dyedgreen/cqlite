@@ -64,6 +64,20 @@ fn match_where_node_id_eq() {
 }
 
 #[test]
+fn match_where_node_id_eq_non_id() {
+    let graph = create_test_graph();
+
+    let nodes = graph
+        .prepare("MATCH (a) WHERE ID(a) = 'not an ID' RETURN a.name")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<String>, _>>()
+        .unwrap();
+    assert!(nodes.is_empty());
+}
+
+#[test]
 fn match_where_node_label_eq() {
     let graph = create_test_graph();
 
