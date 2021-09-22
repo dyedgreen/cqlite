@@ -61,6 +61,56 @@ fn return_parameter() {
 }
 
 #[test]
+fn return_id_of() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare("CREATE (:TEST) CREATE (:TEST) CREATE (:TEST)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    let mut labels: Vec<u64> = graph
+        .prepare("MATCH (p) RETURN ID(p)")
+        .unwrap()
+        .query_map(&mut txn, (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    labels.sort_unstable();
+    assert_eq!(labels, vec![0, 1, 2]);
+    txn.commit().unwrap();
+}
+
+#[test]
+fn return_label_of() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare("CREATE (:PERSON) CREATE (:CITY) CREATE (:my_label)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    let mut labels: Vec<String> = graph
+        .prepare("MATCH (p) RETURN LABEL(p)")
+        .unwrap()
+        .query_map(&mut txn, (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    labels.sort();
+    assert_eq!(labels, vec!["CITY", "PERSON", "my_label"]);
+    txn.commit().unwrap();
+}
+
+#[test]
 fn create_and_return() {
     let graph = Graph::open_anon().unwrap();
 
@@ -85,4 +135,52 @@ fn create_and_return() {
         .collect::<Result<Vec<(String, i64)>, _>>()
         .unwrap();
     assert_eq!(vals, vec![("Peter Parker".into(), 42)]);
+}
+
+#[test]
+fn set_and_return() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare("CREATE (:PERSON)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    let name: Vec<String> = graph
+        .prepare("MATCH (p) SET p.name = 'Stacey' RETURN p.name")
+        .unwrap()
+        .query_map(&mut txn, (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(name, vec!["Stacey"]);
+    txn.commit().unwrap();
+}
+
+#[test]
+fn delete_and_return() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare("CREATE (:PERSON { name: 'Bruce' })")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    let name: Vec<String> = graph
+        .prepare("MATCH (p) DELETE p RETURN p.name")
+        .unwrap()
+        .query_map(&mut txn, (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(name, vec!["Bruce"]);
+    txn.commit().unwrap();
 }
