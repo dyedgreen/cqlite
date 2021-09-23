@@ -74,6 +74,6 @@ fn simplify_merge_sets() {
         returns: vec![],
     };
 
-    normalize::MergeDuplicateUpdates::fix(&mut &mut plan_before).unwrap();
+    normalize::MergeDuplicateUpdates::apply(&mut &mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
 }

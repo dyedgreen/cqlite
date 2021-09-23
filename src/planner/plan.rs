@@ -167,17 +167,13 @@ mod tests {
             UpdateStep::DeleteNode { node: 1 },
             UpdateStep::SetEdgeProperty {
                 edge: 0,
-                key: "test".into(),
-                value: LoadProperty::Parameter {
-                    name: "test".into(),
-                },
+                key: "test",
+                value: LoadProperty::Parameter { name: "test" },
             },
             UpdateStep::SetNodeProperty {
                 node: 0,
-                key: "test".into(),
-                value: LoadProperty::Parameter {
-                    name: "test".into(),
-                },
+                key: "test",
+                value: LoadProperty::Parameter { name: "test" },
             },
             UpdateStep::DeleteEdge { edge: 2 },
         ];
@@ -186,17 +182,13 @@ mod tests {
         let steps_ord = vec![
             UpdateStep::SetEdgeProperty {
                 edge: 0,
-                key: "test".into(),
-                value: LoadProperty::Parameter {
-                    name: "test".into(),
-                },
+                key: "test",
+                value: LoadProperty::Parameter { name: "test" },
             },
             UpdateStep::SetNodeProperty {
                 node: 0,
-                key: "test".into(),
-                value: LoadProperty::Parameter {
-                    name: "test".into(),
-                },
+                key: "test",
+                value: LoadProperty::Parameter { name: "test" },
             },
             UpdateStep::DeleteEdge { edge: 2 },
             UpdateStep::DeleteNode { node: 1 },
