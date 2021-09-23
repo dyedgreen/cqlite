@@ -1,4 +1,7 @@
-use gqlite::{Graph, Property};
+use gqlite::{Error, Graph, Property};
+
+#[macro_use]
+mod common;
 
 #[test]
 fn return_parameter() {
@@ -183,4 +186,18 @@ fn delete_and_return() {
         .unwrap();
     assert_eq!(name, vec!["Bruce"]);
     txn.commit().unwrap();
+}
+
+#[test]
+fn return_out_of_bounds() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.txn().unwrap();
+    let stmt = graph.prepare("RETURN 'test', 42").unwrap();
+    let mut query = stmt.query(&mut txn, ()).unwrap();
+    let m = query.step().unwrap().unwrap();
+
+    assert_eq!(m.get::<String, _>(0).unwrap(), "test");
+    assert_eq!(m.get::<i64, _>(1).unwrap(), 42);
+    assert_err!(m.get::<Property, _>(2), Error::IndexOutOfBounds);
 }

@@ -1,13 +1,7 @@
 use gqlite::{Error, Graph};
 
-macro_rules! assert_err {
-    ($expr:expr, $err:pat) => {
-        match $expr {
-            Err($err) => (),
-            _ => assert!(false, "Unexpected {}", $expr.err().unwrap()),
-        }
-    };
-}
+#[macro_use]
+mod common;
 
 #[test]
 fn delete_node() {
