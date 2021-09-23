@@ -77,3 +77,27 @@ fn create_with_properties_from_parameters() {
         .unwrap();
     assert_eq!(labels, vec![(42, "baz".into())]);
 }
+
+#[test]
+fn create_edges_with_label() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare("CREATE (a:NODE_A) CREATE (b:NODE_B) CREATE (a) -[:EDGE]-> (b)")
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let labels = graph
+        .prepare("MATCH (a) -[e]-> (b) RETURN LABEL(a), LABEL(b), LABEL(e)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<(String, String, String)>, _>>()
+        .unwrap();
+    assert_eq!(labels, [("NODE_A".into(), "NODE_B".into(), "EDGE".into())]);
+}
