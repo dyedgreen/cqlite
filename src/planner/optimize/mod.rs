@@ -3,6 +3,9 @@ use crate::Error;
 
 mod normalize;
 
+#[cfg(test)]
+mod tests;
+
 const MAX_FIX_RUNS: usize = 1000;
 
 pub(crate) trait Optimization {
@@ -25,6 +28,7 @@ pub(crate) trait Optimization {
 impl<'src> QueryPlan<'src> {
     pub fn optimize(mut self) -> Result<Self, Error> {
         normalize::SplitTopLevelAnd::fix(&mut self)?;
+        normalize::MergeDuplicateUpdates::apply(&mut self)?;
         Ok(self)
     }
 }
