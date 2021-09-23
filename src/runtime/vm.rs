@@ -484,6 +484,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                             .map(|(key, access)| -> Result<_, Error> {
                                 Ok((key.clone(), self.access_property(*access)?.to_owned()))
                             })
+                            .filter(|prop| !matches!(prop, Ok((_, Property::Null))))
                             .collect::<Result<_, Error>>()?,
                     };
                     self.txn.queue_update(Update::CreateNode(node.clone()))?;
@@ -508,6 +509,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                             .map(|(key, access)| -> Result<_, Error> {
                                 Ok((key.clone(), self.access_property(*access)?.to_owned()))
                             })
+                            .filter(|prop| !matches!(prop, Ok((_, Property::Null))))
                             .collect::<Result<_, Error>>()?,
                     };
                     self.txn.queue_update(Update::CreateEdge(edge.clone()))?;
