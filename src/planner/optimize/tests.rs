@@ -46,6 +46,7 @@ fn simplify_merge_sets() {
                 key: "foo",
                 value: LoadProperty::Parameter { name: "foo" },
             },
+            UpdateStep::DeleteEdge { edge: 1 },
             UpdateStep::SetNodeProperty {
                 node: 0,
                 key: "foo",
@@ -56,16 +57,20 @@ fn simplify_merge_sets() {
                 key: "foo",
                 value: LoadProperty::Parameter { name: "baz" },
             },
+            UpdateStep::DeleteEdge { edge: 1 },
         ],
         returns: vec![],
     };
     let plan_after = QueryPlan {
         steps: vec![],
-        updates: vec![UpdateStep::SetNodeProperty {
-            node: 0,
-            key: "foo",
-            value: LoadProperty::Parameter { name: "baz" },
-        }],
+        updates: vec![
+            UpdateStep::DeleteEdge { edge: 1 },
+            UpdateStep::SetNodeProperty {
+                node: 0,
+                key: "foo",
+                value: LoadProperty::Parameter { name: "baz" },
+            },
+        ],
         returns: vec![],
     };
 

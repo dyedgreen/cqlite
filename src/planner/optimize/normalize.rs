@@ -28,14 +28,31 @@ impl Optimization for SplitTopLevelAnd {
     }
 }
 
-/// Combine sets for the same node and property into a single
-/// set.
+/// Combine sets for the same node/ node and property into a single
+/// set. Combine deletes for the same node/ edge into a single delete.
 pub(crate) struct MergeDuplicateUpdates;
 
 impl Optimization for MergeDuplicateUpdates {
     fn apply(plan: &mut QueryPlan) -> Result<bool, Error> {
         let mut changed = false;
-        let mut seen = HashSet::new();
+        let mut seen_deletes = HashSet::new();
+        plan.updates = plan
+            .updates
+            .drain(..)
+            .filter(|update| match update {
+                UpdateStep::DeleteNode { node: name } | UpdateStep::DeleteEdge { edge: name } => {
+                    if seen_deletes.contains(name) {
+                        changed = true;
+                        false
+                    } else {
+                        seen_deletes.insert(*name);
+                        true
+                    }
+                }
+                _ => true,
+            })
+            .collect();
+        let mut seen_sets = HashSet::new();
         plan.updates = plan
             .updates
             .drain(..)
@@ -48,11 +65,11 @@ impl Optimization for MergeDuplicateUpdates {
                     edge: name, key, ..
                 } => {
                     let pair = (*name, *key);
-                    if seen.contains(&pair) {
+                    if seen_sets.contains(&pair) {
                         changed = true;
                         false
                     } else {
-                        seen.insert(pair);
+                        seen_sets.insert(pair);
                         true
                     }
                 }
