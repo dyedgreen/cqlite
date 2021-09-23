@@ -17,6 +17,7 @@ pub(crate) struct QueryPlan<'src> {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum MatchStep<'src> {
     LoadAnyNode { name: usize },
+    LoadExactNode { name: usize, id: LoadProperty<'src> },
     LoadOriginNode { name: usize, edge: usize },
     LoadTargetNode { name: usize, edge: usize },
     LoadOtherNode { name: usize, node: usize, edge: usize },
@@ -64,9 +65,6 @@ impl<'src> Filter<'src> {
     }
 }
 
-/// FIXME: The plan does not need to take
-/// ownership here ... (and then these can
-/// be Happy + Copy)
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LoadProperty<'src> {
     Constant(Property),

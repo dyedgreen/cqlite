@@ -66,6 +66,7 @@ impl CompileEnv {
                 Jump { jump }
                 | LoadNextNode { jump }
                 | LoadNextEdge { jump }
+                | LoadExactNode { jump, .. }
                 | CheckIsOrigin { jump, .. }
                 | CheckIsTarget { jump, .. }
                 | CheckNodeLabel { jump, .. }
@@ -382,6 +383,23 @@ impl CompileEnv {
                     self.instructions[start + 1] = Instruction::LoadNextNode {
                         jump: self.instructions.len(),
                     };
+                }
+                MatchStep::LoadExactNode { name, id } => {
+                    let id = self.compile_access(id)?;
+                    self.instructions.push(Instruction::LoadExactNode {
+                        jump: JUMP_PLACEHOLDER,
+                        id,
+                    });
+                    self.push_node(*name);
+                    self.compile_step(plan, &steps[1..])?;
+                    self.pop_node(*name);
+                    self.instructions.push(Instruction::PopNode);
+                    let end = self.instructions.len();
+                    Self::adjust_jumps(
+                        &mut self.instructions[start..=start],
+                        JUMP_PLACEHOLDER,
+                        end,
+                    );
                 }
                 MatchStep::LoadOriginNode { name, edge } => {
                     self.instructions.push(Instruction::LoadOriginNode {

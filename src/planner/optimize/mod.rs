@@ -1,8 +1,8 @@
 use super::QueryPlan;
 use crate::Error;
 
+mod loads;
 mod normalize;
-
 #[cfg(test)]
 mod tests;
 
@@ -29,6 +29,7 @@ impl<'src> QueryPlan<'src> {
     pub fn optimize(mut self) -> Result<Self, Error> {
         normalize::SplitTopLevelAnd::fix(&mut self)?;
         normalize::MergeDuplicateUpdates::apply(&mut self)?;
+        loads::LoadAnyToLoadExact::apply(&mut self)?;
         Ok(self)
     }
 }

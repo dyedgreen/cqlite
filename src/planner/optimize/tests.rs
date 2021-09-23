@@ -77,3 +77,29 @@ fn simplify_merge_sets() {
     normalize::MergeDuplicateUpdates::apply(&mut &mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
 }
+
+#[test]
+fn load_any_node_to_load_exact_node() {
+    let mut plan_before = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 0 },
+            MatchStep::Filter(Filter::NodeHasId {
+                node: 0,
+                id: LoadProperty::Parameter { name: "test" },
+            }),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+    let plan_after = QueryPlan {
+        steps: vec![MatchStep::LoadExactNode {
+            name: 0,
+            id: LoadProperty::Parameter { name: "test" },
+        }],
+        updates: vec![],
+        returns: vec![],
+    };
+
+    loads::LoadAnyToLoadExact::apply(&mut &mut plan_before).unwrap();
+    assert_eq!(plan_before, plan_after);
+}

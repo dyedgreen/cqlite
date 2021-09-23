@@ -3,7 +3,6 @@
 use peg::{error::ParseError, str::LineCol};
 
 pub mod ast;
-
 #[cfg(test)]
 mod tests;
 

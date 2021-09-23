@@ -67,6 +67,12 @@ pub(crate) enum Instruction {
         jump: usize,
     },
 
+    /// Load the node with `id = access[id]` of jump.
+    LoadExactNode {
+        jump: usize,
+        id: usize,
+    },
+
     /// Load the node from which `edge` originates.
     LoadOriginNode {
         edge: usize,
@@ -351,6 +357,20 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                         self.current_inst += 1;
                     } else {
                         self.edge_iters.pop();
+                        self.current_inst = *jump;
+                    }
+                }
+
+                Instruction::LoadExactNode { jump, id } => {
+                    let id = self.access_property(*id)?.cast_to_id().ok();
+                    if let Some(node) = id
+                        .map(|id| self.txn.load_node(id).transpose())
+                        .flatten()
+                        .transpose()?
+                    {
+                        self.node_stack.push(node);
+                        self.current_inst += 1;
+                    } else {
                         self.current_inst = *jump;
                     }
                 }
