@@ -3,7 +3,7 @@ use crate::planner::{Filter, MatchStep, QueryPlan, UpdateStep};
 use crate::Error;
 use std::collections::HashSet;
 
-/// Splits filters with a top level `AND` clause into multiple
+/// Split filters with a top level `AND` clause into multiple
 /// filters.
 pub(crate) struct SplitTopLevelAnd;
 
@@ -28,7 +28,7 @@ impl Optimization for SplitTopLevelAnd {
     }
 }
 
-/// Combine sets for the same node/ node and property into a single
+/// Combine sets for the same node/ edge and property into a single
 /// set. Combine deletes for the same node/ edge into a single delete.
 pub(crate) struct MergeDuplicateUpdates;
 
