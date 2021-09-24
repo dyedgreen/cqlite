@@ -309,3 +309,44 @@ fn match_where_a_or_b() {
     paths.sort_unstable();
     assert_eq!(paths, vec![(0, 5, 3), (0, 8, 1), (1, 6, 4), (2, 9, 0)]);
 }
+
+#[test]
+fn match_path_with_id_constraint() {
+    let graph = create_test_graph();
+
+    let mut paths: Vec<(u64, u64, u64)> = graph
+        .prepare(
+            "
+            MATCH (a) -> (b) <- (c)
+            WHERE ID(c) = 2
+            RETURN ID(a), ID(b), ID(c)
+            ",
+        )
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    paths.sort_unstable();
+    assert_eq!(paths, [(0, 3, 2), (2, 0, 2), (2, 3, 2)]);
+
+    let mut paths: Vec<(u64, u64, u64)> = graph
+        .prepare(
+            "
+            MATCH (a) -> (b) <- (c)
+            WHERE ID(c) = 2 AND ID(a) <> ID(c)
+            RETURN ID(a), ID(b), ID(c)
+            ",
+        )
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    paths.sort_unstable();
+    assert_eq!(paths, [(0, 3, 2)]);
+}
