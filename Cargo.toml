@@ -11,8 +11,11 @@ serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { version = "0.3", features = ["html_reports"] }
 
 [[bench]]
 name = "basic_queries"
+harness = false
+[[bench]]
+name = "match_queries"
 harness = false
