@@ -1,4 +1,4 @@
-//! GQLite / Cypher Lite (TODO: Name!!!)
+//! GQLite provides an embedded graph database.
 //!
 //! # Example
 //! ```
@@ -53,7 +53,7 @@ pub use error::Error;
 pub use params::Params;
 pub use store::Property;
 
-/// TODO: A handle to the database
+/// TODO: Write docs
 pub struct Graph {
     store: Store,
 }

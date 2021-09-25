@@ -28,7 +28,7 @@ pub enum Error {
     #[error("Read only write attempt")]
     ReadOnlyWrite,
 
-    /// CYPHER syntax error.
+    /// Query syntax error.
     #[error("Invalid syntax at line {line}, column {column}: {expected}")]
     Syntax {
         line: usize,
