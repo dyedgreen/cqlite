@@ -311,7 +311,7 @@ fn match_where_a_or_b() {
 }
 
 #[test]
-fn match_path_with_id_constraint() {
+fn match_long_path_with_id_constraint() {
     let graph = create_test_graph();
 
     let mut paths: Vec<(u64, u64, u64)> = graph
@@ -332,7 +332,7 @@ fn match_path_with_id_constraint() {
     paths.sort_unstable();
     assert_eq!(paths, [(0, 3, 2), (2, 0, 2), (2, 3, 2)]);
 
-    let mut paths: Vec<(u64, u64, u64)> = graph
+    let paths: Vec<(u64, u64, u64)> = graph
         .prepare(
             "
             MATCH (a) -> (b) <- (c)
@@ -347,6 +347,28 @@ fn match_path_with_id_constraint() {
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    paths.sort_unstable();
     assert_eq!(paths, [(0, 3, 2)]);
+}
+
+#[test]
+fn match_short_path_with_id_constraint() {
+    let graph = create_test_graph();
+
+    let mut paths: Vec<(u64, u64)> = graph
+        .prepare(
+            "
+            MATCH (a) - (b)
+            WHERE ID(b) = 2
+            RETURN ID(a), ID(b)
+            ",
+        )
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    paths.sort_unstable();
+    assert_eq!(paths, [(0, 2), (3, 2)]);
 }

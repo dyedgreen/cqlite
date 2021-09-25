@@ -59,6 +59,26 @@ pub fn long_path_where_id_eq(c: &mut Criterion) {
     });
 }
 
+pub fn short_path_where_id_eq(c: &mut Criterion) {
+    let graph = build_test_graph();
+
+    c.bench_function("match path where id eq", |b| {
+        b.iter(|| {
+            let stmt = graph
+                .prepare("MATCH (a) - (b) WHERE ID(b) = $id RETURN a.number")
+                .unwrap();
+            let mut txn = graph.txn().unwrap();
+            let val = stmt
+                .query_map(&mut txn, ("id", black_box(42)), |m| m.get::<i64, _>(0))
+                .unwrap()
+                .last()
+                .unwrap()
+                .unwrap();
+            black_box(val);
+        })
+    });
+}
+
 criterion_group! {
     benches,
     long_path_where_id_eq,

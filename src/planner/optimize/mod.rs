@@ -29,6 +29,7 @@ impl<'src> QueryPlan<'src> {
     pub fn optimize(mut self) -> Result<Self, Error> {
         normalize::SplitTopLevelAnd::fix(&mut self)?;
         normalize::MergeDuplicateUpdates::apply(&mut self)?;
+        loads::ReorderIdConstrainedFirst::fix(&mut self)?;
         loads::LoadAnyToLoadExact::apply(&mut self)?;
         Ok(self)
     }
