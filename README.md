@@ -5,6 +5,9 @@
 An embedded graph database implemented in Rust. This is currently a pre-release. It has not been
 extensively tested with 'real-world work-loads', and the file-format and API are not yet stabilized.
 
+The longer term goal is to create an in-process graph database with a stable on-disk format and
+support for a wide range of programming languages.
+
 ```rust
 use gqlite::Graph;
 

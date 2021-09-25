@@ -53,51 +53,120 @@ pub use error::Error;
 pub use params::Params;
 pub use store::Property;
 
-/// TODO: Write docs
+/// A graph is a collection of nodes and edges.
+///
+/// Graphs may be held in-memory or persisted to a single
+/// file and support ACID queries over the graph.
 pub struct Graph {
     store: Store,
 }
 
-/// TODO: A read or read/ write transaction
-/// within the database
+/// An ongoing transaction.
+///
+/// Any modifications to the graph that occurred during this transaction
+/// are discarded unless the transaction is committed.
+///
+/// Once a transaction has started, it will not observe any later
+/// modifications to the graph which occur inside other transactions.
 pub struct Txn<'graph>(StoreTxn<'graph>);
 
-/// TODO: A prepared statement
+/// A prepared statement.
 pub struct Statement<'graph> {
     _graph: &'graph Graph,
     program: Program,
 }
 
-/// TODO: A running query, the same statement
-/// can be run concurrently ...
+/// RAII guard which represents an ongoing query.
 pub struct Query<'stmt, 'txn> {
     stmt: &'stmt Statement<'stmt>,
     vm: VirtualMachine<'stmt, 'txn, 'stmt>,
 }
 
-/// TODO: A RAII guard to access a set of matched
-/// nodes and edges
+/// RAII guard which represents a set of nodes which
+/// matches a query.
 pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
 }
 
-/// TODO: A query iterator
+/// Iterator which yields all matches of the contained
+/// query.
 pub struct MappedQuery<'stmt, 'txn, F> {
     query: Query<'stmt, 'txn>,
     map: F,
 }
 
 impl Graph {
+    /// Opens the file at the given path. If the file does not exist,
+    /// it will be created. A newly created graph will start out empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open("example.graph")?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let store = Store::open(path)?;
         Ok(Self { store })
     }
 
+    /// Open an anonymous graph which is held in-memory.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn open_anon() -> Result<Self, Error> {
         let store = Store::open_anon()?;
         Ok(Self { store })
     }
 
+    /// Prepare a statement given a query `&str`. Queries support
+    /// a subset of the [`CYPHER`](https://opencypher.org) graph
+    /// query language.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// let stmt = graph.prepare(
+    ///     "
+    ///     MATCH (a:PERSON { name: 'Test', age: 42 })
+    ///     RETURN ID(a)
+    ///     "
+    /// )?;
+    /// let stmt = graph.prepare(
+    ///     "
+    ///     MATCH (a:PERSON) -[:KNOWS]-> (b:PERSON)
+    ///     RETURN a.name, b.name
+    ///     "
+    /// )?;
+    /// let stmt = graph.prepare(
+    ///     "
+    ///     MATCH (a:PERSON)
+    ///     MATCH (b:PERSON)
+    ///     CREATE (a) -[:KNOWS { since: 'today' }]-> (b)
+    ///     "
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn prepare<'graph>(&'graph self, query: &str) -> Result<Statement<'graph>, Error> {
         let ast = parser::parse(query)?;
         let plan = QueryPlan::new(&ast)?.optimize()?;
@@ -107,16 +176,25 @@ impl Graph {
         })
     }
 
+    /// Start a new read-only transaction. There may be many simultaneous
+    /// read-only transactions.
     pub fn txn(&self) -> Result<Txn, Error> {
         Ok(Txn(self.store.txn()?))
     }
 
+    /// Start a new write transaction. Queries executed within this transaction
+    /// may modify the graph. Multiple write transactions exclude each other.
     pub fn mut_txn(&self) -> Result<Txn, Error> {
         Ok(Txn(self.store.mut_txn()?))
     }
 }
 
 impl<'graph> Txn<'graph> {
+    /// Commit any changes made to the graph using this transaction. This fails
+    /// if the transaction was not created using [`mut_txn`][Graph::mut_txn].
+    ///
+    /// If a write transaction is dropped without calling `commit`, any modifications
+    /// to the graph will be discarded.
     pub fn commit(self) -> Result<(), Error> {
         self.0.commit()
     }

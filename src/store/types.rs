@@ -39,7 +39,7 @@ use std::{cmp::Ordering, collections::HashMap};
 // - UpdateNode / UpdateEdge    (takes reference to new key-value pair)
 // - Flush                      (ensures writes are propagated to underlying store)
 
-/// TODO: A single property
+/// A single property which can be stored on a node or edge.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Property {
     Id(u64),
@@ -51,7 +51,6 @@ pub enum Property {
     Null,
 }
 
-/// TODO: A reference to a single property
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PropertyRef<'prop> {
     Id(u64),
@@ -63,7 +62,6 @@ pub enum PropertyRef<'prop> {
     Null,
 }
 
-/// TODO: A single node
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub(crate) id: u64,
@@ -71,7 +69,6 @@ pub struct Node {
     pub(crate) properties: HashMap<String, Property>,
 }
 
-/// TODO: A single edge
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     pub(crate) id: u64,
