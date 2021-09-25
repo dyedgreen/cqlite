@@ -11,6 +11,7 @@ pub(crate) struct ReorderIdConstrainedFirst;
 
 impl Optimization for ReorderIdConstrainedFirst {
     fn apply(plan: &mut QueryPlan) -> Result<bool, Error> {
+        // FIXME: Could this be implemented more cleanly?
         let id_constrained: HashSet<usize> = plan
             .steps
             .iter()
@@ -57,7 +58,7 @@ impl Optimization for ReorderIdConstrainedFirst {
 
         let start = plan.steps.iter().find_map(|step| match step {
             MatchStep::LoadAnyNode { name } => {
-                if paths.contains_key(name) {
+                if paths.contains_key(name) && !id_constrained.contains(name) {
                     Some(*name)
                 } else {
                     None
