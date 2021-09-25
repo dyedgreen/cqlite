@@ -2,7 +2,8 @@
 
 [![CI](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml)
 
-An embedded graph database implemented with Rust. Currently WIP/ DRAFT ...
+An embedded graph database implemented in Rust. This is currently a pre-release. It has not been
+extensively tested with 'real-world work-loads', and the file-format and API are not yet stabilized.
 
 ```rust
 use gqlite::Graph;
