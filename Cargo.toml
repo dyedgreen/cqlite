@@ -1,7 +1,13 @@
 [package]
 name = "gqlite"
+description = "An embedded property graph database."
+keywords = ["database", "graph", "cypher", "gql", "acid"]
+categories = ["database", "database-implementations"]
 version = "0.1.0"
 edition = "2018"
+repository = "https://github.com/dyedgreen/gqlite"
+license = "MIT"
+exclude = [".*"]
 
 [dependencies]
 bincode = "1.3.3"
