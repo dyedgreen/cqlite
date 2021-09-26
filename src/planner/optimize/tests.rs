@@ -32,7 +32,7 @@ fn simplify_top_level_and() {
         returns: vec![],
     };
 
-    normalize::SplitTopLevelAnd::fix(&mut &mut plan_before).unwrap();
+    normalize::SplitTopLevelAnd::fix(&mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
 }
 
@@ -74,8 +74,84 @@ fn simplify_merge_sets() {
         returns: vec![],
     };
 
-    normalize::MergeDuplicateUpdates::apply(&mut &mut plan_before).unwrap();
+    normalize::MergeDuplicateUpdates::apply(&mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
+}
+
+#[test]
+fn load_reorder_id_constrained_first() {
+    let mut plan_before = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 0 },
+            MatchStep::LoadOriginEdge { name: 1, node: 0 },
+            MatchStep::LoadAnyNode { name: 5 },
+            MatchStep::LoadTargetNode { name: 2, edge: 1 },
+            MatchStep::LoadEitherEdge { name: 3, node: 2 },
+            MatchStep::LoadOtherNode {
+                name: 4,
+                edge: 3,
+                node: 2,
+            },
+            MatchStep::LoadTargetEdge { name: 6, node: 5 },
+            MatchStep::LoadOriginNode { name: 7, edge: 6 },
+            MatchStep::Filter(Filter::NodeHasId {
+                node: 4,
+                id: LoadProperty::Parameter { name: "test" },
+            }),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+    let plan_after = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 4 },
+            MatchStep::LoadEitherEdge { name: 3, node: 4 },
+            MatchStep::LoadOtherNode {
+                name: 2,
+                edge: 3,
+                node: 4,
+            },
+            MatchStep::LoadTargetEdge { name: 1, node: 2 },
+            MatchStep::LoadOriginNode { name: 0, edge: 1 },
+            MatchStep::LoadAnyNode { name: 5 },
+            MatchStep::LoadTargetEdge { name: 6, node: 5 },
+            MatchStep::LoadOriginNode { name: 7, edge: 6 },
+            MatchStep::Filter(Filter::NodeHasId {
+                node: 4,
+                id: LoadProperty::Parameter { name: "test" },
+            }),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+
+    loads::ReorderIdConstrainedFirst::apply(&mut plan_before).unwrap();
+    assert_eq!(plan_before, plan_after);
+}
+
+#[test]
+fn load_reorder_id_constrained_first_no_unnecessary_flips() {
+    let plan = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 0 },
+            MatchStep::LoadOriginEdge { name: 1, node: 0 },
+            MatchStep::LoadTargetNode { name: 2, edge: 1 },
+            MatchStep::Filter(Filter::NodeHasId {
+                node: 2,
+                id: LoadProperty::Parameter { name: "foo" },
+            }),
+            MatchStep::Filter(Filter::NodeHasId {
+                node: 0,
+                id: LoadProperty::Parameter { name: "bar" },
+            }),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+
+    let mut plan_copy = plan.clone();
+    loads::ReorderIdConstrainedFirst::apply(&mut plan_copy).unwrap();
+    assert_eq!(plan, plan_copy);
 }
 
 #[test]
@@ -100,6 +176,6 @@ fn load_any_node_to_load_exact_node() {
         returns: vec![],
     };
 
-    loads::LoadAnyToLoadExact::apply(&mut &mut plan_before).unwrap();
+    loads::LoadAnyToLoadExact::apply(&mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
 }
