@@ -1,6 +1,9 @@
 # Cypher Lite / GQLite
 
+[![crates.io](https://img.shields.io/crates/v/gqlite.svg)](https://crates.io/crates/gqlite)
+[![Released API docs](https://docs.rs/gqlite/badge.svg)](https://docs.rs/gqlite)
 [![CI](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 An embedded graph database implemented in Rust. This is currently a pre-release. It has not been
 extensively tested with 'real-world work-loads', and the file-format and API are not yet stabilized.
