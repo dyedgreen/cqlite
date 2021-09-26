@@ -1,4 +1,4 @@
-use gqlite::Graph;
+use cqlite::Graph;
 
 fn create_test_graph() -> Graph {
     let graph = Graph::open_anon().unwrap();

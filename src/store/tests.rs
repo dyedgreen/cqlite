@@ -19,7 +19,7 @@ fn id_seq_works() {
 
 #[test]
 fn create_nodes_and_edges() {
-    let store = Store::open("test.gqlite").unwrap();
+    let store = Store::open("test.graph").unwrap();
     let mut txn = store.mut_txn().unwrap();
     let node1 = txn
         .unchecked_create_node(Node {

@@ -1,4 +1,4 @@
-use gqlite::{Error, Graph, Property};
+use cqlite::{Error, Graph, Property};
 
 #[macro_use]
 mod common;

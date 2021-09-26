@@ -1,4 +1,4 @@
-//! GQLite provides an embedded graph database.
+//! CQLite provides an embedded property graph database.
 //!
 //! A `Graph` can store a number of nodes, as well as edges
 //! forming relationships between those nodes. Each node or
@@ -10,8 +10,8 @@
 //!
 //! # Example
 //! ```
-//! # fn test() -> Result<(), gqlite::Error> {
-//! use gqlite::Graph;
+//! # fn test() -> Result<(), cqlite::Error> {
+//! use cqlite::Graph;
 //!
 //! let graph = Graph::open_anon()?;
 //!
@@ -114,8 +114,8 @@ impl Graph {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open("example.graph")?;
     /// # Ok(())
@@ -132,8 +132,8 @@ impl Graph {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open_anon()?;
     /// # Ok(())
@@ -152,8 +152,8 @@ impl Graph {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open_anon()?;
     /// let stmt = graph.prepare(
@@ -225,8 +225,8 @@ impl<'graph> Statement<'graph> {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open_anon()?;
     /// let stmt = graph.prepare(
@@ -275,8 +275,8 @@ impl<'graph> Statement<'graph> {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open_anon()?;
     /// let stmt = graph.prepare(
@@ -322,8 +322,8 @@ impl<'graph> Statement<'graph> {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::Graph;
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::Graph;
     ///
     /// let graph = Graph::open_anon()?;
     /// let mut txn = graph.mut_txn()?;
@@ -380,8 +380,8 @@ impl<'query> Match<'query> {
     /// # Examples
     ///
     /// ```
-    /// # fn test() -> Result<(), gqlite::Error> {
-    /// use gqlite::{Graph, Property};
+    /// # fn test() -> Result<(), cqlite::Error> {
+    /// use cqlite::{Graph, Property};
     ///
     /// let graph = Graph::open_anon()?;
     /// let stmt = graph.prepare("RETURN $first, $second, $third")?;

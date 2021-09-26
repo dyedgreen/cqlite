@@ -1,4 +1,4 @@
-use gqlite::Graph;
+use cqlite::Graph;
 
 #[test]
 fn set_once() {

@@ -1,6 +1,6 @@
 /target
 Cargo.lock
 *.db
-*.gqlite
+*.cqlite
 *.graph
 *.lock*

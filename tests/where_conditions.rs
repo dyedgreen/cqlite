@@ -1,4 +1,4 @@
-use gqlite::Graph;
+use cqlite::Graph;
 
 #[test]
 fn where_a_and_b() {

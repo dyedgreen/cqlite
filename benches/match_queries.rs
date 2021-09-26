@@ -1,5 +1,5 @@
+use cqlite::Graph;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use gqlite::Graph;
 
 fn build_test_graph() -> Graph {
     let graph = Graph::open_anon().unwrap();

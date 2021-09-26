@@ -1,4 +1,4 @@
-use gqlite::{Graph, Property};
+use cqlite::{Graph, Property};
 
 #[test]
 fn run_a_to_b() {

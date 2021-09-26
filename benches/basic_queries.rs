@@ -1,5 +1,5 @@
+use cqlite::Graph;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use gqlite::Graph;
 
 fn simple_bench(
     c: &mut Criterion,

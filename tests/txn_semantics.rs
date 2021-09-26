@@ -1,4 +1,4 @@
-use gqlite::Graph;
+use cqlite::Graph;
 
 #[test]
 fn concurrent_reader_and_writer() {

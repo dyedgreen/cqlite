@@ -1,8 +1,8 @@
-# Cypher Lite / GQLite
+# CQLite
 
-[![crates.io](https://img.shields.io/crates/v/gqlite.svg)](https://crates.io/crates/gqlite)
-[![Released API docs](https://docs.rs/gqlite/badge.svg)](https://docs.rs/gqlite)
-[![CI](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/dyedgreen/gqlite/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/cqlite.svg)](https://crates.io/crates/cqlite)
+[![Released API docs](https://docs.rs/cqlite/badge.svg)](https://docs.rs/cqlite)
+[![CI](https://github.com/dyedgreen/cqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/dyedgreen/cqlite/actions/workflows/ci.yml)
 [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 An embedded graph database implemented in Rust. This is currently a pre-release. It has not been
@@ -12,7 +12,7 @@ The longer term goal is to create an in-process graph database with a stable on-
 support for a wide range of programming languages.
 
 ```rust
-use gqlite::Graph;
+use cqlite::Graph;
 
 let graph = Graph::open_anon()?;
 
