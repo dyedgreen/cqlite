@@ -5,6 +5,7 @@ use std::convert::Infallible;
 use std::sync::TryLockError;
 use thiserror::Error;
 
+/// Errors which can occur while interacting with a [`Graph`][crate::Graph].
 #[derive(Error, Debug)]
 pub enum Error {
     /// IO errors, from the `std::io` module.

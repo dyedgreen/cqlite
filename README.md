@@ -50,7 +50,7 @@ PEG grammar and parser for a subset of the `CYPHER` graph query language
 
 ### Query Planner :: `src/planner`
 
-Transforms a parsed query ast into a logical query plan. (In the future) does some
+Transforms a parsed query ast into a logical query plan. Performs some
 optimizations on the query plan.
 
 ### Byte-Code Interpreter :: `src/runtime`

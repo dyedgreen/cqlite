@@ -5,7 +5,12 @@ pub trait Sealed {
     fn build(self) -> HashMap<String, Property>;
 }
 
-/// TODO: Document ...
+/// A set of parameters which can be bound when running a
+/// [`Statement`][crate::Statement].
+///
+/// Parameters are a list of key-value pairs. The keys are
+/// strings, the values are represented as [`Property`][Property]
+/// values.
 pub trait Params: Sealed {}
 
 impl Sealed for () {

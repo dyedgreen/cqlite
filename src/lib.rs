@@ -1,5 +1,13 @@
 //! GQLite provides an embedded graph database.
 //!
+//! A `Graph` can store a number of nodes, as well as edges
+//! forming relationships between those nodes. Each node or
+//! edge has a set of zero or more key value pairs called properties.
+//!
+//! The graph supports ACID queries using a simplified subset of the
+//! [`CYPHER`](https://opencypher.org) graph query language, which can
+//! be run inside read-only or read-write transactions.
+//!
 //! # Example
 //! ```
 //! # fn test() -> Result<(), gqlite::Error> {
@@ -89,7 +97,11 @@ pub struct Match<'query> {
 }
 
 /// Iterator which yields all matches of the contained
-/// query.
+/// query after mapping them with a user provided
+/// function.
+///
+/// A `MappedQuery` can be obtained by calling
+/// [`query_map`][Statement::query_map].
 pub struct MappedQuery<'stmt, 'txn, F> {
     query: Query<'stmt, 'txn>,
     map: F,
@@ -201,6 +213,44 @@ impl<'graph> Txn<'graph> {
 }
 
 impl<'graph> Statement<'graph> {
+    /// Execute this statement. The returned `Query` RAII
+    /// guard can be used to step through the produced matches.
+    ///
+    /// Queries may include parameters of the form `$identifier`.
+    /// Parameters can be provided using the `params`
+    /// argument, providing a value which implementing [`Params`][Params].
+    /// If a value for a given parameter is not provided, it
+    /// defaults to `NULL`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// let stmt = graph.prepare(
+    ///     "
+    ///     CREATE (a:PERSON { message: $msg, age: 42 })
+    ///     RETURN ID(a), a.message, a.age
+    ///     "
+    /// )?;
+    ///
+    /// let mut txn = graph.mut_txn()?;
+    /// let mut query = stmt.query(&mut txn, ("msg", "Hello World!"))?;
+    ///
+    /// let m = query.step()?.unwrap();
+    /// assert_eq!(m.get::<u64, _>(0)?, 0);
+    /// assert_eq!(m.get::<String, _>(1)?, "Hello World!");
+    /// assert_eq!(m.get::<i64, _>(2)?, 42);
+    ///
+    /// assert!(query.step()?.is_none());
+    ///
+    /// txn.commit()?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn query<'stmt, 'txn, P>(
         &'stmt self,
         txn: &'txn mut Txn<'graph>,
@@ -216,6 +266,40 @@ impl<'graph> Statement<'graph> {
         })
     }
 
+    /// Execute this statement and return an iterator which
+    /// maps each match using a user-provided function.
+    ///
+    /// This is almost always more convenient than using
+    /// [`query`][Statement::query] directly.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// let stmt = graph.prepare(
+    ///     "
+    ///     CREATE (a:PERSON { message: $msg, age: 42 })
+    ///     RETURN ID(a), a.message, a.age
+    ///     "
+    /// )?;
+    ///
+    /// let mut txn = graph.mut_txn()?;
+    /// let nodes = stmt
+    ///     .query_map(&mut txn, ("msg", "Hello World!"), |m| {
+    ///         Ok((m.get(0)?, m.get(1)?, m.get(2)?))
+    ///     })?
+    ///     .collect::<Result<Vec<(u64, String, i64)>, _>>()?;
+    ///
+    /// assert_eq!(nodes, [(0, "Hello World!".into(), 42)]);
+    ///
+    /// txn.commit()?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn query_map<'stmt, 'txn, T, P, F>(
         &'stmt self,
         txn: &'txn mut Txn<'graph>,
@@ -232,6 +316,25 @@ impl<'graph> Statement<'graph> {
         })
     }
 
+    /// Run the query to completion, ignoring any
+    /// values which may be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::Graph;
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// let mut txn = graph.mut_txn()?;
+    /// graph
+    ///     .prepare("CREATE (a:PERSON { message: $msg, age: 42 })")?
+    ///     .execute(&mut txn, ("msg", "Hello World!"))?;
+    /// txn.commit()?;
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn execute<'stmt, 'txn, P>(
         &'stmt self,
         txn: &'txn mut Txn<'graph>,
