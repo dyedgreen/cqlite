@@ -90,8 +90,8 @@ pub struct Query<'stmt, 'txn> {
     vm: VirtualMachine<'stmt, 'txn, 'stmt>,
 }
 
-/// RAII guard which represents a set of nodes which
-/// matches a query.
+/// RAII guard which represents a set of nodes and edges
+/// matching a query.
 pub struct Match<'query> {
     query: &'query Query<'query, 'query>,
 }
@@ -351,6 +351,9 @@ impl<'graph> Statement<'graph> {
 }
 
 impl<'stmt, 'txn> Query<'stmt, 'txn> {
+    /// Advance the query to the next return. If the query is
+    /// completed, returns `None`, otherwise the match is
+    /// returned.
     #[inline]
     pub fn step(&mut self) -> Result<Option<Match>, Error> {
         if self.stmt.program.returns.is_empty() {
@@ -370,6 +373,30 @@ impl<'stmt, 'txn> Query<'stmt, 'txn> {
 }
 
 impl<'query> Match<'query> {
+    /// Return the nth expression from the queries `RETURN`
+    /// statement. The index starts from `0`. Out of bounds
+    /// indices return an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # fn test() -> Result<(), gqlite::Error> {
+    /// use gqlite::{Graph, Property};
+    ///
+    /// let graph = Graph::open_anon()?;
+    /// let stmt = graph.prepare("RETURN $first, $second, $third")?;
+    /// let mut txn = graph.txn()?;
+    /// let mut query = stmt.query(&mut txn, (("first", "one"), ("second", 2.0), ("third", 3)))?;
+    ///
+    /// let m = query.step()?.unwrap();
+    /// assert_eq!(m.get::<String, _>(0)?, "one");
+    /// assert_eq!(m.get::<f64, _>(1)?, 2.0);
+    /// assert_eq!(m.get::<i64, _>(2)?, 3);
+    /// assert!(m.get::<Property, _>(3).is_err());
+    /// # Ok(())
+    /// # }
+    /// # test().unwrap();
+    /// ```
     pub fn get<P, E>(&self, idx: usize) -> Result<P, Error>
     where
         Property: TryInto<P, Error = E>,
