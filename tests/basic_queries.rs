@@ -463,3 +463,35 @@ fn run_return_label() {
         .unwrap();
     assert_eq!(labels, vec![("PERSON".into(), "IS".into())]);
 }
+
+#[test]
+fn match_return_count() {
+    let graph = Graph::open_anon().unwrap();
+
+    let count: Vec<usize> = graph
+        .prepare("RETURN 1, 2, 3, 4, 5")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(count, [5]);
+
+    let count: Vec<usize> = graph
+        .prepare("RETURN 1, 2, 3, 4, 5, 6, 7")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(count, [7]);
+
+    let count: Vec<usize> = graph
+        .prepare("RETURN 1, 2")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(count, [2]);
+}

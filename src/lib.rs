@@ -57,6 +57,9 @@ pub(crate) mod planner;
 pub(crate) mod runtime;
 pub(crate) mod store;
 
+#[cfg(feature = "ffi")]
+mod ffi;
+
 pub use error::Error;
 pub use params::Params;
 pub use store::Property;
@@ -403,6 +406,12 @@ impl<'query> Match<'query> {
         Error: From<E>,
     {
         Ok(self.query.vm.access_return(idx)?.try_into()?)
+    }
+
+    /// Return the number of properties returned
+    /// by this query.
+    pub fn property_count(&self) -> usize {
+        self.query.stmt.program.returns.len()
     }
 }
 
