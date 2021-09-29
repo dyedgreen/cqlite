@@ -17,8 +17,8 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     parameters: HashMap<String, Property>,
     current_inst: usize,
 
-    pub(crate) node_stack: Vec<Node>,
-    pub(crate) edge_stack: Vec<Edge>,
+    node_stack: Vec<Node>,
+    edge_stack: Vec<Edge>,
     node_iters: Vec<NodeIter<'txn>>,
     edge_iters: Vec<EdgeIter<'txn>>,
 }
@@ -249,7 +249,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    pub fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
+    fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
         match &self.accesses[access] {
             Access::Constant(val) => Ok(val.as_ref()),
             Access::NodeId(node) => Ok(PropertyRef::Id(self.node_stack[*node].id())),
