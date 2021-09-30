@@ -30,6 +30,17 @@ enum CQLiteStatus {
 };
 typedef uint8_t CQLiteStatus;
 
+enum CQLiteType {
+  CQLITE_ID,
+  CQLITE_INTEGER,
+  CQLITE_REAL,
+  CQLITE_BOOLEAN,
+  CQLITE_TEXT,
+  CQLITE_BLOB,
+  CQLITE_NULL,
+};
+typedef uint8_t CQLiteType;
+
 typedef struct CQLiteGraph CQLiteGraph;
 
 typedef struct CQLiteStatement CQLiteStatement;
@@ -76,5 +87,21 @@ CQLiteStatus cqlite_bind_blob(struct CQLiteStatement *stmt,
                               uintptr_t length);
 
 CQLiteStatus cqlite_bind_null(struct CQLiteStatement *stmt, const char *name);
+
+CQLiteType cqlite_return_type(struct CQLiteStatement *stmt, uintptr_t idx);
+
+uint64_t cqlite_return_id(struct CQLiteStatement *stmt, uintptr_t idx);
+
+int64_t cqlite_return_integer(struct CQLiteStatement *stmt, uintptr_t idx);
+
+double cqlite_return_real(struct CQLiteStatement *stmt, uintptr_t idx);
+
+bool cqlite_return_boolean(struct CQLiteStatement *stmt, uintptr_t idx);
+
+const char *cqlite_return_text(struct CQLiteStatement *stmt, uintptr_t idx);
+
+const void *cqlite_return_blob(struct CQLiteStatement *stmt, uintptr_t idx);
+
+uintptr_t cqlite_return_bytes(struct CQLiteStatement *stmt, uintptr_t idx);
 
 #endif /* CQLITE_H */

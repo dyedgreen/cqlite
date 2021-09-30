@@ -471,7 +471,7 @@ fn match_return_count() {
     let count: Vec<usize> = graph
         .prepare("RETURN 1, 2, 3, 4, 5")
         .unwrap()
-        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.count()))
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
@@ -480,7 +480,7 @@ fn match_return_count() {
     let count: Vec<usize> = graph
         .prepare("RETURN 1, 2, 3, 4, 5, 6, 7")
         .unwrap()
-        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.count()))
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
@@ -489,7 +489,7 @@ fn match_return_count() {
     let count: Vec<usize> = graph
         .prepare("RETURN 1, 2")
         .unwrap()
-        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.property_count()))
+        .query_map(&mut graph.txn().unwrap(), (), |m| Ok(m.count()))
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();

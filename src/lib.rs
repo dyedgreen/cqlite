@@ -410,7 +410,7 @@ impl<'query> Match<'query> {
 
     /// Return the number of properties returned
     /// by this query.
-    pub fn property_count(&self) -> usize {
+    pub fn count(&self) -> usize {
         self.query.stmt.program.returns.len()
     }
 }

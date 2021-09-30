@@ -40,6 +40,18 @@ pub enum CQLiteStatus {
     CQLITE_MISUSE,
 }
 
+#[repr(u8)]
+#[allow(non_camel_case_types)]
+pub enum CQLiteType {
+    CQLITE_ID,
+    CQLITE_INTEGER,
+    CQLITE_REAL,
+    CQLITE_BOOLEAN,
+    CQLITE_TEXT,
+    CQLITE_BLOB,
+    CQLITE_NULL,
+}
+
 pub struct CQLiteGraph {
     store: Store,
     txn_count: AtomicUsize,
@@ -55,7 +67,10 @@ pub struct CQLiteStatement {
     graph: *const CQLiteGraph,
     program: *mut Program,
     parameters: HashMap<String, Property>,
-    vm: Option<VirtualMachine<'static, 'static, 'static>>,
+    runtime: Option<(
+        VirtualMachine<'static, 'static, 'static>,
+        Vec<Option<Vec<u8>>>,
+    )>,
 }
 
 #[no_mangle]
@@ -191,7 +206,7 @@ pub unsafe extern "C" fn cqlite_prepare(
             graph,
             program,
             parameters: HashMap::new(),
-            vm: None,
+            runtime: None,
         })
     };
     match inner() {
@@ -208,17 +223,20 @@ pub unsafe extern "C" fn cqlite_start(
     stmt: *mut CQLiteStatement,
     txn: *mut CQLiteTxn,
 ) -> CQLiteStatus {
-    (*stmt).vm = Some(VirtualMachine::new(
-        &mut txn.as_mut().unwrap().txn,
-        (*stmt).program.as_mut().unwrap(),
-        (*stmt).parameters.clone(),
+    (*stmt).runtime = Some((
+        VirtualMachine::new(
+            &mut txn.as_mut().unwrap().txn,
+            (*stmt).program.as_mut().unwrap(),
+            (*stmt).parameters.clone(),
+        ),
+        (*(*stmt).program).returns.iter().map(|_| None).collect(),
     ));
     CQLiteStatus::CQLITE_OK
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cqlite_step(stmt: *mut CQLiteStatement) -> CQLiteStatus {
-    if let Some(vm) = (*stmt).vm.as_mut() {
+    if let Some((vm, buffers)) = (*stmt).runtime.as_mut() {
         let mut inner = || -> Result<CQLiteStatus, CQLiteStatus> {
             if (*(*stmt).program).returns.is_empty() {
                 loop {
@@ -228,6 +246,7 @@ pub unsafe extern "C" fn cqlite_step(stmt: *mut CQLiteStatement) -> CQLiteStatus
                     }
                 }
             } else {
+                buffers.iter_mut().for_each(|b| *b = None);
                 match vm.run()? {
                     Status::Yield => Ok(CQLiteStatus::CQLITE_MATCH),
                     Status::Halt => Ok(CQLiteStatus::CQLITE_DONE),
@@ -399,6 +418,104 @@ pub unsafe extern "C" fn cqlite_bind_null(
     match inner() {
         Err(err) => err,
         Ok(()) => CQLiteStatus::CQLITE_OK,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_type(stmt: *mut CQLiteStatement, idx: usize) -> CQLiteType {
+    let (vm, _) = (*stmt).runtime.as_mut().unwrap();
+    match vm.access_return(idx).unwrap() {
+        Property::Id(_) => CQLiteType::CQLITE_ID,
+        Property::Integer(_) => CQLiteType::CQLITE_INTEGER,
+        Property::Real(_) => CQLiteType::CQLITE_REAL,
+        Property::Boolean(_) => CQLiteType::CQLITE_BOOLEAN,
+        Property::Text(_) => CQLiteType::CQLITE_TEXT,
+        Property::Blob(_) => CQLiteType::CQLITE_BLOB,
+        Property::Null => CQLiteType::CQLITE_NULL,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_id(stmt: *mut CQLiteStatement, idx: usize) -> u64 {
+    let (vm, _) = (*stmt).runtime.as_mut().unwrap();
+    match vm.access_return(idx).unwrap() {
+        Property::Id(id) => id,
+        _ => panic!(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_integer(stmt: *mut CQLiteStatement, idx: usize) -> i64 {
+    let (vm, _) = (*stmt).runtime.as_mut().unwrap();
+    match vm.access_return(idx).unwrap() {
+        Property::Integer(num) => num,
+        _ => panic!(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_real(stmt: *mut CQLiteStatement, idx: usize) -> f64 {
+    let (vm, _) = (*stmt).runtime.as_mut().unwrap();
+    match vm.access_return(idx).unwrap() {
+        Property::Real(num) => num,
+        _ => panic!(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_boolean(stmt: *mut CQLiteStatement, idx: usize) -> bool {
+    let (vm, _) = (*stmt).runtime.as_mut().unwrap();
+    match vm.access_return(idx).unwrap() {
+        Property::Boolean(val) => val,
+        _ => panic!(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_text(
+    stmt: *mut CQLiteStatement,
+    idx: usize,
+) -> *const c_char {
+    let (vm, buffers) = (*stmt).runtime.as_mut().unwrap();
+    match &buffers[idx] {
+        Some(buffer) => buffer.as_ptr() as *const c_char,
+        None => match vm.access_return(idx).unwrap() {
+            Property::Text(string) => {
+                let mut buf = string.into_bytes();
+                buf.push(0);
+                buffers[idx] = Some(buf);
+                buffers[idx].as_ref().unwrap().as_ptr() as *const c_char
+            }
+            _ => panic!(),
+        },
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_blob(
+    stmt: *mut CQLiteStatement,
+    idx: usize,
+) -> *const c_void {
+    let (vm, buffers) = (*stmt).runtime.as_mut().unwrap();
+    match &buffers[idx] {
+        Some(buffer) => buffer.as_ptr() as *const c_void,
+        None => match vm.access_return(idx).unwrap() {
+            Property::Text(string) => {
+                let buf = string.into_bytes();
+                buffers[idx] = Some(buf);
+                buffers[idx].as_ref().unwrap().as_ptr() as *const c_void
+            }
+            _ => panic!(),
+        },
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_bytes(stmt: *mut CQLiteStatement, idx: usize) -> usize {
+    let (_, buffers) = (*stmt).runtime.as_mut().unwrap();
+    match &buffers[idx] {
+        Some(buffer) => buffer.len(),
+        None => 0,
     }
 }
 
