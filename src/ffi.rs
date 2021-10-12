@@ -1,7 +1,7 @@
 use crate::parser;
 use crate::planner::QueryPlan;
 use crate::runtime::{Program, Status, VirtualMachine};
-use crate::store::{Property, Store, StoreTxn};
+use crate::store::{PropOwned, Store, StoreTxn};
 use crate::Error;
 use std::collections::HashMap;
 use std::ffi::{c_void, CStr};
@@ -66,7 +66,7 @@ pub struct CQLiteTxn {
 pub struct CQLiteStatement {
     graph: *const CQLiteGraph,
     program: *mut Program,
-    parameters: HashMap<String, Property>,
+    parameters: HashMap<String, PropOwned>,
     runtime: Option<(
         VirtualMachine<'static, 'static, 'static>,
         Vec<Option<Vec<u8>>>,
@@ -284,7 +284,7 @@ pub unsafe extern "C" fn cqlite_bind_id(
             .map_err(|_| CQLiteStatus::CQLITE_INVALID_STRING)?;
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Id(value));
+            .insert(name.to_string(), PropOwned::Id(value));
         Ok(())
     };
     match inner() {
@@ -305,7 +305,7 @@ pub unsafe extern "C" fn cqlite_bind_integer(
             .map_err(|_| CQLiteStatus::CQLITE_INVALID_STRING)?;
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Integer(value));
+            .insert(name.to_string(), PropOwned::Integer(value));
         Ok(())
     };
     match inner() {
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn cqlite_bind_real(
             .map_err(|_| CQLiteStatus::CQLITE_INVALID_STRING)?;
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Real(value));
+            .insert(name.to_string(), PropOwned::Real(value));
         Ok(())
     };
     match inner() {
@@ -347,7 +347,7 @@ pub unsafe extern "C" fn cqlite_bind_boolean(
             .map_err(|_| CQLiteStatus::CQLITE_INVALID_STRING)?;
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Boolean(value));
+            .insert(name.to_string(), PropOwned::Boolean(value));
         Ok(())
     };
     match inner() {
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn cqlite_bind_text(
             .map_err(|_| CQLiteStatus::CQLITE_INVALID_STRING)?;
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Text(value.to_string()));
+            .insert(name.to_string(), PropOwned::Text(value.to_string()));
         Ok(())
     };
     match inner() {
@@ -394,7 +394,7 @@ pub unsafe extern "C" fn cqlite_bind_blob(
         let value = std::slice::from_raw_parts(value as *const u8, length);
         (*stmt)
             .parameters
-            .insert(name.to_string(), Property::Blob(value.to_vec()));
+            .insert(name.to_string(), PropOwned::Blob(value.to_vec()));
         Ok(())
     };
     match inner() {
@@ -425,13 +425,13 @@ pub unsafe extern "C" fn cqlite_bind_null(
 pub unsafe extern "C" fn cqlite_return_type(stmt: *mut CQLiteStatement, idx: usize) -> CQLiteType {
     let (vm, _) = (*stmt).runtime.as_mut().unwrap();
     match vm.access_return(idx).unwrap() {
-        Property::Id(_) => CQLiteType::CQLITE_ID,
-        Property::Integer(_) => CQLiteType::CQLITE_INTEGER,
-        Property::Real(_) => CQLiteType::CQLITE_REAL,
-        Property::Boolean(_) => CQLiteType::CQLITE_BOOLEAN,
-        Property::Text(_) => CQLiteType::CQLITE_TEXT,
-        Property::Blob(_) => CQLiteType::CQLITE_BLOB,
-        Property::Null => CQLiteType::CQLITE_NULL,
+        PropOwned::Id(_) => CQLiteType::CQLITE_ID,
+        PropOwned::Integer(_) => CQLiteType::CQLITE_INTEGER,
+        PropOwned::Real(_) => CQLiteType::CQLITE_REAL,
+        PropOwned::Boolean(_) => CQLiteType::CQLITE_BOOLEAN,
+        PropOwned::Text(_) => CQLiteType::CQLITE_TEXT,
+        PropOwned::Blob(_) => CQLiteType::CQLITE_BLOB,
+        PropOwned::Null => CQLiteType::CQLITE_NULL,
     }
 }
 
@@ -439,7 +439,7 @@ pub unsafe extern "C" fn cqlite_return_type(stmt: *mut CQLiteStatement, idx: usi
 pub unsafe extern "C" fn cqlite_return_id(stmt: *mut CQLiteStatement, idx: usize) -> u64 {
     let (vm, _) = (*stmt).runtime.as_mut().unwrap();
     match vm.access_return(idx).unwrap() {
-        Property::Id(id) => id,
+        PropOwned::Id(id) => id,
         _ => panic!(),
     }
 }
@@ -448,7 +448,7 @@ pub unsafe extern "C" fn cqlite_return_id(stmt: *mut CQLiteStatement, idx: usize
 pub unsafe extern "C" fn cqlite_return_integer(stmt: *mut CQLiteStatement, idx: usize) -> i64 {
     let (vm, _) = (*stmt).runtime.as_mut().unwrap();
     match vm.access_return(idx).unwrap() {
-        Property::Integer(num) => num,
+        PropOwned::Integer(num) => num,
         _ => panic!(),
     }
 }
@@ -457,7 +457,7 @@ pub unsafe extern "C" fn cqlite_return_integer(stmt: *mut CQLiteStatement, idx: 
 pub unsafe extern "C" fn cqlite_return_real(stmt: *mut CQLiteStatement, idx: usize) -> f64 {
     let (vm, _) = (*stmt).runtime.as_mut().unwrap();
     match vm.access_return(idx).unwrap() {
-        Property::Real(num) => num,
+        PropOwned::Real(num) => num,
         _ => panic!(),
     }
 }
@@ -466,7 +466,7 @@ pub unsafe extern "C" fn cqlite_return_real(stmt: *mut CQLiteStatement, idx: usi
 pub unsafe extern "C" fn cqlite_return_boolean(stmt: *mut CQLiteStatement, idx: usize) -> bool {
     let (vm, _) = (*stmt).runtime.as_mut().unwrap();
     match vm.access_return(idx).unwrap() {
-        Property::Boolean(val) => val,
+        PropOwned::Boolean(val) => val,
         _ => panic!(),
     }
 }
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn cqlite_return_text(
     match &buffers[idx] {
         Some(buffer) => buffer.as_ptr() as *const c_char,
         None => match vm.access_return(idx).unwrap() {
-            Property::Text(string) => {
+            PropOwned::Text(string) => {
                 let mut buf = string.into_bytes();
                 buf.push(0);
                 buffers[idx] = Some(buf);
@@ -500,7 +500,7 @@ pub unsafe extern "C" fn cqlite_return_blob(
     match &buffers[idx] {
         Some(buffer) => buffer.as_ptr() as *const c_void,
         None => match vm.access_return(idx).unwrap() {
-            Property::Text(string) => {
+            PropOwned::Text(string) => {
                 let buf = string.into_bytes();
                 buffers[idx] = Some(buf);
                 buffers[idx].as_ref().unwrap().as_ptr() as *const c_void
