@@ -79,9 +79,9 @@ fn update_nodes_and_edges() {
     txn.commit().unwrap();
 
     let mut txn = store.mut_txn().unwrap();
-    txn.update_node(node.id(), "test", Property::Integer(42))
+    txn.update_node(node.id(), "test", PropOwned::Integer(42))
         .unwrap();
-    txn.update_edge(edge.id(), "test", Property::Real(42.0))
+    txn.update_edge(edge.id(), "test", PropOwned::Real(42.0))
         .unwrap();
     txn.commit().unwrap();
 
@@ -89,8 +89,8 @@ fn update_nodes_and_edges() {
     let node = txn.load_node(node.id()).unwrap().unwrap();
     let edge = txn.load_edge(edge.id()).unwrap().unwrap();
 
-    assert_eq!(node.property("test"), &Property::Integer(42));
-    assert_eq!(edge.property("test"), &Property::Real(42.0));
+    assert_eq!(node.property("test"), &PropOwned::Integer(42));
+    assert_eq!(edge.property("test"), &PropOwned::Real(42.0));
 }
 
 #[test]

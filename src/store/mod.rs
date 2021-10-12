@@ -14,7 +14,7 @@ mod types;
 mod tests;
 
 pub(crate) use iter::{EdgeIter, NodeIter};
-pub use types::{Edge, Node, Property, PropertyRef};
+pub use types::{Edge, Node, PropOwned, PropRef};
 
 const ID_SQUENCE: usize = 0;
 const DB_NODES: usize = 1;
@@ -42,8 +42,8 @@ pub(crate) struct StoreTxn<'env> {
 pub(crate) enum Update {
     CreateNode(Node),
     CreateEdge(Edge),
-    SetNodeProperty(u64, String, Property),
-    SetEdgeProperty(u64, String, Property),
+    SetNodeProperty(u64, String, PropOwned),
+    SetEdgeProperty(u64, String, PropOwned),
     DeleteNode(u64),
     DeleteEdge(u64),
 }
@@ -167,9 +167,9 @@ impl<'e> StoreTxn<'e> {
         Ok(node)
     }
 
-    pub fn update_node(&mut self, node: u64, key: &str, value: Property) -> Result<(), Error> {
+    pub fn update_node(&mut self, node: u64, key: &str, value: PropOwned) -> Result<(), Error> {
         let mut node = self.load_node(node)?.ok_or(Error::MissingNode)?;
-        if value == Property::Null {
+        if value == PropOwned::Null {
             node.properties.remove(key);
         } else {
             node.properties.insert(key.to_string(), value);
@@ -203,9 +203,9 @@ impl<'e> StoreTxn<'e> {
         Ok(edge)
     }
 
-    pub fn update_edge(&mut self, edge: u64, key: &str, value: Property) -> Result<(), Error> {
+    pub fn update_edge(&mut self, edge: u64, key: &str, value: PropOwned) -> Result<(), Error> {
         let mut edge = self.load_edge(edge)?.ok_or(Error::MissingEdge)?;
-        if value == Property::Null {
+        if value == PropOwned::Null {
             edge.properties.remove(key);
         } else {
             edge.properties.insert(key.to_string(), value);
@@ -248,7 +248,7 @@ impl<'e> StoreTxn<'e> {
         &self,
         node_or_edge_id: u64,
         property: &str,
-    ) -> Result<Option<Property>, Error> {
+    ) -> Result<Option<PropOwned>, Error> {
         Ok(self
             .updates
             .try_read()?

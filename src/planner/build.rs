@@ -1,6 +1,7 @@
 use super::plan::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
+use crate::parser::ast;
+use crate::store::PropOwned;
 use crate::Error;
-use crate::{parser::ast, Property};
 use std::collections::HashMap;
 
 pub(crate) struct BuildEnv<'src> {
@@ -76,11 +77,11 @@ impl<'src> BuildEnv<'src> {
         let load = match expr {
             ast::Expression::Parameter(name) => LoadProperty::Parameter { name },
             ast::Expression::Literal(literal) => LoadProperty::Constant(match literal {
-                ast::Literal::Integer(i) => Property::Integer(*i),
-                ast::Literal::Real(r) => Property::Real(*r),
-                ast::Literal::Boolean(b) => Property::Boolean(*b),
-                ast::Literal::Text(t) => Property::Text(t.to_string()),
-                ast::Literal::Null => Property::Null,
+                ast::Literal::Integer(i) => PropOwned::Integer(*i),
+                ast::Literal::Real(r) => PropOwned::Real(*r),
+                ast::Literal::Boolean(b) => PropOwned::Boolean(*b),
+                ast::Literal::Text(t) => PropOwned::Text(t.to_string()),
+                ast::Literal::Null => PropOwned::Null,
             }),
             ast::Expression::IdOf { name } => match self
                 .names

@@ -1,6 +1,6 @@
 use crate::Error;
 use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::{cmp::Ordering, collections::HashMap};
 
 // Some general notes
@@ -39,9 +39,19 @@ use std::{cmp::Ordering, collections::HashMap};
 // - UpdateNode / UpdateEdge    (takes reference to new key-value pair)
 // - Flush                      (ensures writes are propagated to underlying store)
 
-/// A single property which can be stored on a node or edge.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Property {
+pub enum PropRef<'a> {
+    Id(u64),
+    Integer(i64),
+    Real(f64),
+    Boolean(bool),
+    Text(&'a str),
+    Blob(&'a [u8]),
+    Null,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PropOwned {
     Id(u64),
     Integer(i64),
     Real(f64),
@@ -51,29 +61,18 @@ pub enum Property {
     Null,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PropertyRef<'prop> {
-    Id(u64),
-    Integer(i64),
-    Real(f64),
-    Boolean(bool),
-    Text(&'prop str),
-    Blob(&'prop [u8]),
-    Null,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub(crate) id: u64,
     pub(crate) label: String,
-    pub(crate) properties: HashMap<String, Property>,
+    pub(crate) properties: HashMap<String, PropOwned>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     pub(crate) id: u64,
     pub(crate) label: String,
-    pub(crate) properties: HashMap<String, Property>,
+    pub(crate) properties: HashMap<String, PropOwned>,
     pub(crate) origin: u64,
     pub(crate) target: u64,
 }
@@ -87,8 +86,8 @@ impl Node {
         self.label.as_str()
     }
 
-    pub fn property(&self, key: &str) -> &Property {
-        self.properties.get(key).unwrap_or(&Property::Null)
+    pub fn property(&self, key: &str) -> &PropOwned {
+        self.properties.get(key).unwrap_or(&PropOwned::Null)
     }
 }
 
@@ -101,57 +100,55 @@ impl Edge {
         self.label.as_str()
     }
 
-    pub fn property(&self, key: &str) -> &Property {
-        self.properties.get(key).unwrap_or(&Property::Null)
+    pub fn property(&self, key: &str) -> &PropOwned {
+        self.properties.get(key).unwrap_or(&PropOwned::Null)
     }
 }
 
-impl Property {
-    pub(crate) fn as_ref(&self) -> PropertyRef {
+impl PropOwned {
+    pub(crate) fn to_ref(&self) -> PropRef {
         match self {
-            Property::Id(id) => PropertyRef::Id(*id),
-            Property::Integer(num) => PropertyRef::Integer(*num),
-            Property::Real(num) => PropertyRef::Real(*num),
-            Property::Boolean(val) => PropertyRef::Boolean(*val),
-            Property::Text(text) => PropertyRef::Text(text),
-            Property::Blob(bytes) => PropertyRef::Blob(bytes),
-            Property::Null => PropertyRef::Null,
+            Self::Id(id) => PropRef::Id(*id),
+            Self::Integer(num) => PropRef::Integer(*num),
+            Self::Real(num) => PropRef::Real(*num),
+            Self::Boolean(val) => PropRef::Boolean(*val),
+            Self::Text(text) => PropRef::Text(text.as_str()),
+            Self::Blob(bytes) => PropRef::Blob(bytes.as_slice()),
+            Self::Null => PropRef::Null,
         }
     }
 }
 
-impl<'prop> PropertyRef<'prop> {
-    pub(crate) fn to_owned(self) -> Property {
+impl<'a> PropRef<'a> {
+    pub(crate) fn to_owned(&self) -> PropOwned {
         match self {
-            PropertyRef::Id(id) => Property::Id(id),
-            PropertyRef::Integer(num) => Property::Integer(num),
-            PropertyRef::Real(num) => Property::Real(num),
-            PropertyRef::Boolean(val) => Property::Boolean(val),
-            PropertyRef::Text(text) => Property::Text(text.to_string()),
-            PropertyRef::Blob(bytes) => Property::Blob(bytes.to_vec()),
-            PropertyRef::Null => Property::Null,
+            Self::Id(id) => PropOwned::Id(*id),
+            Self::Integer(num) => PropOwned::Integer(*num),
+            Self::Real(num) => PropOwned::Real(*num),
+            Self::Boolean(val) => PropOwned::Boolean(*val),
+            Self::Text(text) => PropOwned::Text(text.to_string()),
+            Self::Blob(bytes) => PropOwned::Blob(bytes.to_vec()),
+            Self::Null => PropOwned::Null,
         }
     }
 
-    pub(crate) fn loosely_equals(&self, other: &PropertyRef) -> bool {
-        fn eq(lhs: &PropertyRef, rhs: &PropertyRef) -> bool {
-            use PropertyRef::*;
+    pub(crate) fn loosely_equals(&self, other: &Self) -> bool {
+        fn eq(lhs: &PropRef, rhs: &PropRef) -> bool {
             match (lhs, rhs) {
-                (Integer(i), Real(r)) => *i as f64 == *r,
+                (PropRef::Integer(i), PropRef::Real(r)) => *i as f64 == *r,
                 _ => false,
             }
         }
         self == other || eq(self, other) || eq(other, self)
     }
 
-    pub(crate) fn loosely_compare(&self, other: &PropertyRef) -> Option<Ordering> {
-        use PropertyRef::*;
+    pub(crate) fn loosely_compare(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (Integer(lhs), Integer(rhs)) => lhs.partial_cmp(rhs),
-            (Real(lhs), Real(rhs)) => lhs.partial_cmp(rhs),
-            (Real(lhs), Integer(rhs)) => lhs.partial_cmp(&(*rhs as f64)),
-            (Integer(lhs), Real(rhs)) => (*lhs as f64).partial_cmp(rhs),
-            (Text(lhs), Text(rhs)) => Some(lhs.cmp(rhs)),
+            (Self::Integer(lhs), Self::Integer(rhs)) => lhs.partial_cmp(rhs),
+            (Self::Real(lhs), Self::Real(rhs)) => lhs.partial_cmp(rhs),
+            (Self::Real(lhs), Self::Integer(rhs)) => lhs.partial_cmp(&(*rhs as f64)),
+            (Self::Integer(lhs), Self::Real(rhs)) => (*lhs as f64).partial_cmp(rhs),
+            (Self::Text(lhs), Self::Text(rhs)) => Some(lhs.cmp(rhs)),
             _ => None,
         }
     }
@@ -169,100 +166,10 @@ impl<'prop> PropertyRef<'prop> {
     }
 
     pub(crate) fn cast_to_id(&self) -> Result<u64, Error> {
-        use PropertyRef::*;
         match *self {
-            Id(val) => Ok(val),
-            Integer(val) => Ok(val.try_into().map_err(|_| Error::TypeMismatch)?),
+            Self::Id(val) => Ok(val),
+            Self::Integer(val) => Ok(val.try_into().map_err(|_| Error::TypeMismatch)?),
             _ => Err(Error::TypeMismatch),
         }
-    }
-}
-
-macro_rules! try_from {
-    ($type:ty, $variant:ident) => {
-        impl TryFrom<Property> for $type {
-            type Error = Error;
-
-            fn try_from(value: Property) -> Result<Self, Self::Error> {
-                match value {
-                    Property::$variant(val) => Ok(val),
-                    _ => Err(Error::TypeMismatch),
-                }
-            }
-        }
-
-        impl TryFrom<Property> for Option<$type> {
-            type Error = Error;
-
-            fn try_from(value: Property) -> Result<Self, Self::Error> {
-                match value {
-                    Property::Null => Ok(None),
-                    prop => Ok(Some(prop.try_into()?)),
-                }
-            }
-        }
-
-        impl From<$type> for Property {
-            fn from(value: $type) -> Self {
-                Property::$variant(value)
-            }
-        }
-
-        impl From<Option<$type>> for Property {
-            fn from(value: Option<$type>) -> Self {
-                value.map(|v| v.into()).unwrap_or(Property::Null)
-            }
-        }
-    };
-}
-
-macro_rules! from {
-    ($type:ty, $variant:ident) => {
-        impl From<$type> for Property {
-            fn from(value: $type) -> Self {
-                Property::$variant(value.into())
-            }
-        }
-
-        impl From<Option<$type>> for Property {
-            fn from(value: Option<$type>) -> Self {
-                value.map(|v| v.into()).unwrap_or(Property::Null)
-            }
-        }
-    };
-}
-
-try_from!(u64, Id);
-try_from!(i64, Integer);
-try_from!(f64, Real);
-try_from!(bool, Boolean);
-try_from!(String, Text);
-try_from!(Vec<u8>, Blob);
-
-from!(i32, Integer);
-from!(&str, Text);
-from!(&[u8], Blob);
-
-impl<const N: usize> From<[u8; N]> for Property {
-    fn from(value: [u8; N]) -> Self {
-        Property::Blob(value.into())
-    }
-}
-
-impl<const N: usize> From<Option<[u8; N]>> for Property {
-    fn from(value: Option<[u8; N]>) -> Self {
-        value.map(|v| v.into()).unwrap_or(Property::Null)
-    }
-}
-
-impl<const N: usize> From<&[u8; N]> for Property {
-    fn from(value: &[u8; N]) -> Self {
-        Property::Blob(value.to_vec())
-    }
-}
-
-impl<const N: usize> From<Option<&[u8; N]>> for Property {
-    fn from(value: Option<&[u8; N]>) -> Self {
-        value.map(|v| v.into()).unwrap_or(Property::Null)
     }
 }

@@ -1,4 +1,4 @@
-use crate::store::Property;
+use crate::Property;
 use std::collections::HashMap;
 
 pub trait Sealed {

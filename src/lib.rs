@@ -54,6 +54,7 @@ pub(crate) mod error;
 pub(crate) mod params;
 pub(crate) mod parser;
 pub(crate) mod planner;
+pub(crate) mod property;
 pub(crate) mod runtime;
 pub(crate) mod store;
 
@@ -62,7 +63,7 @@ mod ffi;
 
 pub use error::Error;
 pub use params::Params;
-pub use store::Property;
+pub use property::Property;
 
 /// A graph is a collection of nodes and edges.
 ///
@@ -265,7 +266,15 @@ impl<'graph> Statement<'graph> {
         txn.0.flush()?;
         Ok(Query {
             stmt: self,
-            vm: VirtualMachine::new(&mut txn.0, &self.program, params.build()),
+            vm: VirtualMachine::new(
+                &mut txn.0,
+                &self.program,
+                params
+                    .build()
+                    .into_iter()
+                    .map(|(k, v)| (k, v.to_internal()))
+                    .collect(),
+            ),
         })
     }
 
@@ -405,7 +414,7 @@ impl<'query> Match<'query> {
         Property: TryInto<P, Error = E>,
         Error: From<E>,
     {
-        Ok(self.query.vm.access_return(idx)?.try_into()?)
+        Ok(self.query.vm.access_return(idx)?.to_external().try_into()?)
     }
 
     /// Return the number of properties returned

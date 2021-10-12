@@ -1,5 +1,5 @@
 use super::Program;
-use crate::store::{Edge, EdgeIter, Node, NodeIter, Property, PropertyRef, StoreTxn, Update};
+use crate::store::{Edge, EdgeIter, Node, NodeIter, PropOwned, PropRef, StoreTxn, Update};
 use crate::Error;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ pub(crate) struct VirtualMachine<'env, 'txn, 'prog> {
     instructions: &'prog [Instruction],
     accesses: &'prog [Access],
     returns: &'prog [Access],
-    parameters: HashMap<String, Property>,
+    parameters: HashMap<String, PropOwned>,
     current_inst: usize,
 
     node_stack: Vec<Node>,
@@ -211,7 +211,7 @@ pub(crate) enum Instruction {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Access {
-    Constant(Property),
+    Constant(PropOwned),
     NodeId(usize),
     EdgeId(usize),
     NodeLabel(usize),
@@ -231,7 +231,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
     pub fn new(
         txn: &'txn mut StoreTxn<'env>,
         program: &'prog Program,
-        parameters: HashMap<String, Property>,
+        parameters: HashMap<String, PropOwned>,
     ) -> Self {
         Self {
             txn,
@@ -249,33 +249,33 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
         }
     }
 
-    fn access_property(&self, access: usize) -> Result<PropertyRef, Error> {
+    fn access_property(&self, access: usize) -> Result<PropRef, Error> {
         match &self.accesses[access] {
-            Access::Constant(val) => Ok(val.as_ref()),
-            Access::NodeId(node) => Ok(PropertyRef::Id(self.node_stack[*node].id())),
-            Access::EdgeId(edge) => Ok(PropertyRef::Id(self.edge_stack[*edge].id())),
-            Access::NodeLabel(node) => Ok(PropertyRef::Text(self.node_stack[*node].label())),
-            Access::EdgeLabel(edge) => Ok(PropertyRef::Text(self.edge_stack[*edge].label())),
-            Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key).as_ref()),
-            Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key).as_ref()),
+            Access::Constant(val) => Ok(val.to_ref()),
+            Access::NodeId(node) => Ok(PropRef::Id(self.node_stack[*node].id())),
+            Access::EdgeId(edge) => Ok(PropRef::Id(self.edge_stack[*edge].id())),
+            Access::NodeLabel(node) => Ok(PropRef::Text(self.node_stack[*node].label())),
+            Access::EdgeLabel(edge) => Ok(PropRef::Text(self.edge_stack[*edge].label())),
+            Access::NodeProperty(node, key) => Ok(self.node_stack[*node].property(key).to_ref()),
+            Access::EdgeProperty(edge, key) => Ok(self.edge_stack[*edge].property(key).to_ref()),
             Access::Parameter(name) => Ok(self
                 .parameters
                 .get(name)
-                .map(Property::as_ref)
-                .unwrap_or(PropertyRef::Null)),
+                .map(PropOwned::to_ref)
+                .unwrap_or(PropRef::Null)),
         }
     }
 
-    pub fn access_return(&self, access: usize) -> Result<Property, Error> {
+    pub fn access_return(&self, access: usize) -> Result<PropOwned, Error> {
         match self.returns.get(access).ok_or(Error::IndexOutOfBounds)? {
             Access::Constant(val) => Ok(val.clone()),
-            Access::NodeId(node) => Ok(Property::Id(self.node_stack[*node].id())),
-            Access::EdgeId(edge) => Ok(Property::Id(self.edge_stack[*edge].id())),
+            Access::NodeId(node) => Ok(PropOwned::Id(self.node_stack[*node].id())),
+            Access::EdgeId(edge) => Ok(PropOwned::Id(self.edge_stack[*edge].id())),
             Access::NodeLabel(node) => {
-                Ok(Property::Text(self.node_stack[*node].label().to_string()))
+                Ok(PropOwned::Text(self.node_stack[*node].label().to_string()))
             }
             Access::EdgeLabel(edge) => {
-                Ok(Property::Text(self.edge_stack[*edge].label().to_string()))
+                Ok(PropOwned::Text(self.edge_stack[*edge].label().to_string()))
             }
             Access::NodeProperty(node, key) => {
                 let node = &self.node_stack[*node];
@@ -295,7 +295,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 .parameters
                 .get(name)
                 .map(Clone::clone)
-                .unwrap_or(Property::Null)),
+                .unwrap_or(PropOwned::Null)),
         }
     }
 
@@ -504,7 +504,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                             .map(|(key, access)| -> Result<_, Error> {
                                 Ok((key.clone(), self.access_property(*access)?.to_owned()))
                             })
-                            .filter(|prop| !matches!(prop, Ok((_, Property::Null))))
+                            .filter(|prop| !matches!(prop, Ok((_, PropOwned::Null))))
                             .collect::<Result<_, Error>>()?,
                     };
                     self.txn.queue_update(Update::CreateNode(node.clone()))?;
@@ -529,7 +529,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                             .map(|(key, access)| -> Result<_, Error> {
                                 Ok((key.clone(), self.access_property(*access)?.to_owned()))
                             })
-                            .filter(|prop| !matches!(prop, Ok((_, Property::Null))))
+                            .filter(|prop| !matches!(prop, Ok((_, PropOwned::Null))))
                             .collect::<Result<_, Error>>()?,
                     };
                     self.txn.queue_update(Update::CreateEdge(edge.clone()))?;
