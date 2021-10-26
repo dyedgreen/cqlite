@@ -303,3 +303,18 @@ fn match_edges_with_properties() {
         .unwrap();
     assert_eq!(edge, 6);
 }
+
+#[test]
+fn match_nodes_with_label() {
+    let graph = create_test_graph();
+
+    let mut nodes: Vec<u64> = graph
+        .prepare("MATCH (a:PERSON) RETURN ID(a)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| m.get(0))
+        .unwrap()
+        .collect::<Result<Vec<u64>, _>>()
+        .unwrap();
+    nodes.sort_unstable();
+    assert_eq!(nodes, [0, 1]);
+}

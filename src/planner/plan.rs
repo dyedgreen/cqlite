@@ -18,6 +18,7 @@ pub(crate) struct QueryPlan<'src> {
 pub(crate) enum MatchStep<'src> {
     LoadAnyNode { name: usize },
     LoadExactNode { name: usize, id: LoadProperty<'src> },
+    LoadLabeledNode { name: usize, label: &'src str },
     LoadOriginNode { name: usize, edge: usize },
     LoadTargetNode { name: usize, edge: usize },
     LoadOtherNode { name: usize, node: usize, edge: usize },

@@ -189,6 +189,7 @@ fn run_a_edge_b_with_where_property() {
             "
             CREATE (a:PERSON { answer: 42 })
             CREATE (b:PERSON)
+            CREATE (c:PERSON)
             CREATE (a) -[:KNOWS]-> (b)
             ",
         )
@@ -494,4 +495,38 @@ fn match_return_count() {
         .collect::<Result<_, _>>()
         .unwrap();
     assert_eq!(count, [2]);
+}
+
+#[test]
+fn match_multiple_edges() {
+    let graph = Graph::open_anon().unwrap();
+
+    let mut txn = graph.mut_txn().unwrap();
+    graph
+        .prepare(
+            "
+            CREATE (a:PERSON)
+            CREATE (b:PERSON)
+            CREATE (c:PERSON)
+            CREATE (a) -[:KNOWS]-> (b)
+            CREATE (a) -[:KNOWS]-> (c)
+            ",
+        )
+        .unwrap()
+        .execute(&mut txn, ())
+        .unwrap();
+    txn.commit().unwrap();
+
+    let mut pairs: Vec<(u64, u64)> = graph
+        .prepare("MATCH (a) -> (b) RETURN ID(a), ID(b)")
+        .unwrap()
+        .query_map(&mut graph.txn().unwrap(), (), |m| {
+            Ok((m.get(0)?, m.get(1)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    pairs.sort_unstable();
+
+    assert_eq!(pairs, [(0, 1), (0, 2)]);
 }

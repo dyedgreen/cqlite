@@ -204,3 +204,43 @@ impl Optimization for LoadAnyToLoadExact {
         Ok(changed)
     }
 }
+
+/// Transform pairs of `LoadAnyNode` and `NodeHasLabel` into
+/// `LoadLabeledNode`.
+pub(crate) struct LoadAnyToLoadLabeled;
+
+impl Optimization for LoadAnyToLoadLabeled {
+    fn apply(plan: &mut QueryPlan) -> Result<bool, Error> {
+        let mut changed = false;
+        let mut node_label_checks: HashMap<usize, &str> = plan
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                MatchStep::Filter(Filter::NodeHasLabel { node, label }) => Some((*node, *label)),
+                _ => None,
+            })
+            .collect();
+        plan.steps = plan
+            .steps
+            .drain(..)
+            .filter_map(|step| match step {
+                MatchStep::LoadAnyNode { name } => node_label_checks
+                    .remove(&name)
+                    .map(|label| {
+                        changed = true;
+                        MatchStep::LoadLabeledNode { name, label }
+                    })
+                    .or(Some(MatchStep::LoadAnyNode { name })),
+                MatchStep::Filter(Filter::NodeHasLabel { node, label }) => {
+                    if node_label_checks.contains_key(&node) {
+                        Some(MatchStep::Filter(Filter::NodeHasLabel { node, label }))
+                    } else {
+                        None
+                    }
+                }
+                step => Some(step),
+            })
+            .collect();
+        Ok(changed)
+    }
+}

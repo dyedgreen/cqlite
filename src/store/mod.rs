@@ -21,6 +21,7 @@ const DB_NODES: usize = 1;
 const DB_EDGES: usize = 2;
 const DB_ORIGINS: usize = 3;
 const DB_TARGETS: usize = 4;
+const DB_LABELS: usize = 5;
 
 pub(crate) struct Store {
     pub env: Env,
@@ -36,6 +37,8 @@ pub(crate) struct StoreTxn<'env> {
 
     pub origins: Db<u64, u64>,
     pub targets: Db<u64, u64>,
+
+    pub labels: UDb<[u8], u64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +76,7 @@ impl Store {
         let edges = txn.root_db(DB_EDGES).ok_or(Error::Corruption)?;
         let origins = txn.root_db(DB_ORIGINS).ok_or(Error::Corruption)?;
         let targets = txn.root_db(DB_TARGETS).ok_or(Error::Corruption)?;
+        let labels = txn.root_db(DB_LABELS).ok_or(Error::Corruption)?;
         Ok(StoreTxn {
             txn: DynTxn::Txn(txn),
             id_seq,
@@ -81,6 +85,7 @@ impl Store {
             edges,
             origins,
             targets,
+            labels,
         })
     }
 
@@ -91,6 +96,7 @@ impl Store {
         let edges = Self::get_buffer_db(&mut txn, DB_EDGES)?;
         let origins = Self::get_db(&mut txn, DB_ORIGINS)?;
         let targets = Self::get_db(&mut txn, DB_TARGETS)?;
+        let labels = Self::get_buffer_db(&mut txn, DB_LABELS)?;
         Ok(StoreTxn {
             txn: DynTxn::MutTxn(txn),
             id_seq,
@@ -99,6 +105,7 @@ impl Store {
             edges,
             origins,
             targets,
+            labels,
         })
     }
 
@@ -115,11 +122,12 @@ impl Store {
         }
     }
 
-    fn get_buffer_db<K>(txn: &mut MutTxn<&Env, ()>, n: usize) -> Result<btree::UDb<K, [u8]>, Error>
+    fn get_buffer_db<K, V>(txn: &mut MutTxn<&Env, ()>, n: usize) -> Result<btree::UDb<K, V>, Error>
     where
-        K: UnsizedStorable,
+        K: UnsizedStorable + ?Sized,
+        V: UnsizedStorable + ?Sized,
     {
-        if let Some(db) = txn.root_db::<K, [u8], _>(n) {
+        if let Some(db) = txn.root_db::<K, V, _>(n) {
             Ok(db)
         } else {
             let db = btree::create_db_(txn)?;
@@ -164,6 +172,12 @@ impl<'e> StoreTxn<'e> {
     pub fn unchecked_create_node(&mut self, node: Node) -> Result<Node, Error> {
         let bytes = bincode::serialize(&node)?;
         btree::put(&mut self.txn, &mut self.nodes, &node.id, bytes.as_ref())?;
+        btree::put(
+            &mut self.txn,
+            &mut self.labels,
+            node.label().as_bytes(),
+            &node.id,
+        )?;
         Ok(node)
     }
 
@@ -190,7 +204,17 @@ impl<'e> StoreTxn<'e> {
         if has_origin || has_target {
             Err(Error::DeleteConnected)
         } else {
-            btree::del(&mut self.txn, &mut self.nodes, &node, None)?;
+            self.load_node(node)?
+                .map(|node| {
+                    btree::del(
+                        &mut self.txn,
+                        &mut self.labels,
+                        node.label.as_bytes(),
+                        Some(&node.id),
+                    )?;
+                    btree::del(&mut self.txn, &mut self.nodes, &node.id, None)
+                })
+                .transpose()?;
             Ok(())
         }
     }
@@ -310,6 +334,7 @@ impl<'e> StoreTxn<'e> {
         self.txn.set_root(DB_EDGES, self.edges.db)?;
         self.txn.set_root(DB_ORIGINS, self.origins.db)?;
         self.txn.set_root(DB_TARGETS, self.targets.db)?;
+        self.txn.set_root(DB_LABELS, self.labels.db)?;
         self.txn.commit()
     }
 }

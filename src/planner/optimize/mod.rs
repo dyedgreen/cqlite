@@ -31,6 +31,7 @@ impl<'src> QueryPlan<'src> {
         normalize::MergeDuplicateUpdates::apply(&mut self)?;
         loads::ReorderIdConstrainedFirst::fix(&mut self)?;
         loads::LoadAnyToLoadExact::apply(&mut self)?;
+        loads::LoadAnyToLoadLabeled::apply(&mut self)?;
         Ok(self)
     }
 }

@@ -4,13 +4,17 @@ use sanakirja::{btree, Env, UnsizedStorable};
 use serde::Deserialize;
 use std::marker::PhantomData;
 
-type BytesIter<'txn, K> =
-    btree::Iter<'txn, DynTxn<&'txn Env>, K, [u8], btree::page_unsized::Page<K, [u8]>>;
+type BytesCursor<K, V> = btree::Cursor<K, V, btree::page_unsized::Page<K, V>>;
+
+type BytesIter<'txn, K, V> =
+    btree::Iter<'txn, DynTxn<&'txn Env>, K, V, btree::page_unsized::Page<K, V>>;
+
 pub(crate) type IndexIter<'txn> =
     btree::Iter<'txn, DynTxn<&'txn Env>, u64, u64, btree::page::Page<u64, u64>>;
 
 pub(crate) enum EdgeIter<'txn> {
     Directed(u64, IndexIter<'txn>),
+    // TODO(dyedgreen): Fix this; its a bit iffy ...
     Undirected(u64, Option<IndexIter<'txn>>, IndexIter<'txn>),
 }
 
@@ -19,45 +23,13 @@ where
     K: UnsizedStorable,
     I: Deserialize<'txn>,
 {
-    inner: BytesIter<'txn, K>,
+    inner: BytesIter<'txn, K, [u8]>,
     _item: PhantomData<&'txn I>,
 }
 
-pub(crate) type NodeIter<'txn> = DeserializeIter<'txn, u64, Node>;
-
-impl<'txn, K, I> DeserializeIter<'txn, K, I>
-where
-    K: UnsizedStorable,
-    I: Deserialize<'txn>,
-{
-    pub(crate) fn new(
-        txn: &'txn StoreTxn<'txn>,
-        db: &btree::UDb<K, [u8]>,
-        origin: Option<K>,
-    ) -> Result<Self, Error> {
-        let inner = btree::iter(&txn.txn, db, origin.as_ref().map(|key| (key, None)))?;
-        Ok(Self {
-            inner,
-            _item: PhantomData,
-        })
-    }
-}
-
-impl<'txn, K, I> Iterator for DeserializeIter<'txn, K, I>
-where
-    K: 'txn + UnsizedStorable,
-    I: Deserialize<'txn>,
-{
-    type Item = Result<(&'txn K, I), Error>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|res| {
-            res.map_err(|err| err).and_then(|(key, bytes)| {
-                let item = bincode::deserialize(bytes)?;
-                Ok((key, item))
-            })
-        })
-    }
+pub(crate) enum NodeIter<'txn> {
+    All(DeserializeIter<'txn, u64, Node>),
+    WithLabel(String, &'txn StoreTxn<'txn>, BytesCursor<[u8], u64>),
 }
 
 impl<'txn> EdgeIter<'txn> {
@@ -105,6 +77,88 @@ impl<'txn> Iterator for EdgeIter<'txn> {
                     *iter_opt = None;
                     iter_target.next().and_then(filter(*id))
                 }),
+        }
+    }
+}
+
+impl<'txn, K, I> DeserializeIter<'txn, K, I>
+where
+    K: UnsizedStorable,
+    I: Deserialize<'txn>,
+{
+    pub(crate) fn new(
+        txn: &'txn StoreTxn<'txn>,
+        db: &btree::UDb<K, [u8]>,
+        origin: Option<K>,
+    ) -> Result<Self, Error> {
+        let inner = btree::iter(&txn.txn, db, origin.as_ref().map(|key| (key, None)))?;
+        Ok(Self {
+            inner,
+            _item: PhantomData,
+        })
+    }
+}
+
+impl<'txn, K, I> Iterator for DeserializeIter<'txn, K, I>
+where
+    K: 'txn + UnsizedStorable,
+    I: Deserialize<'txn>,
+{
+    type Item = Result<(&'txn K, I), Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|res| {
+            res.map_err(|err| err).and_then(|(key, bytes)| {
+                let item = bincode::deserialize(bytes)?;
+                Ok((key, item))
+            })
+        })
+    }
+}
+
+impl<'txn> NodeIter<'txn> {
+    pub(crate) fn all(txn: &'txn StoreTxn<'txn>) -> Result<Self, Error> {
+        Ok(Self::All(DeserializeIter::new(txn, &txn.nodes, None)?))
+    }
+
+    pub(crate) fn with_label(txn: &'txn StoreTxn<'txn>, label: String) -> Result<Self, Error> {
+        let mut cursor = BytesCursor::new(&txn.txn, &txn.labels)?;
+        // FIXME(dyedgreen): This is a curious issue with unsized
+        // cursors/ unsized iterators.
+        cursor.set(&txn.txn, label.as_bytes(), None)?;
+        cursor.prev(&txn.txn)?;
+        if cursor
+            .current(&txn.txn)?
+            .map(|(key, _)| key != label.as_bytes())
+            .unwrap_or(false)
+        {
+            cursor.next(&txn.txn)?;
+        }
+        Ok(Self::WithLabel(label, txn, cursor))
+    }
+}
+
+impl<'txn> Iterator for NodeIter<'txn> {
+    type Item = Result<Node, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::All(iter) => iter
+                .next()
+                .map(|maybe_result| maybe_result.map(|(_, node)| node)),
+            Self::WithLabel(label, txn, cursor) => match cursor.next(&txn.txn).transpose() {
+                Some(result) => result
+                    .map(|(key, node_id)| {
+                        if key == label.as_bytes() {
+                            Some(node_id)
+                        } else {
+                            None
+                        }
+                    })
+                    .transpose()
+                    .and_then(|result| result.and_then(|&id| txn.load_node(id)).transpose()),
+                None => None,
+            },
         }
     }
 }

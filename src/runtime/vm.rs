@@ -42,6 +42,11 @@ pub(crate) enum Instruction {
 
     /// Create an iterator over all nodes.
     IterNodes,
+    /// Create an iterator over nodes with an
+    /// exact label.
+    IterLabeledNodes {
+        label: String,
+    },
 
     /// Iterate edges originating from `node`.
     IterOriginEdges {
@@ -318,8 +323,12 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::Halt => return Ok(Status::Halt),
 
                 Instruction::IterNodes => {
+                    self.node_iters.push(NodeIter::all(self.txn)?);
+                    self.current_inst += 1;
+                }
+                Instruction::IterLabeledNodes { label } => {
                     self.node_iters
-                        .push(NodeIter::new(self.txn, &self.txn.nodes, None)?);
+                        .push(NodeIter::with_label(self.txn, label.clone())?);
                     self.current_inst += 1;
                 }
 
@@ -342,7 +351,7 @@ impl<'env, 'txn, 'prog> VirtualMachine<'env, 'txn, 'prog> {
                 Instruction::LoadNextNode { jump } => {
                     let iter = self.node_iters.last_mut().unwrap();
                     if let Some(entry) = iter.next() {
-                        self.node_stack.push(entry?.1);
+                        self.node_stack.push(entry?);
                         self.current_inst += 1;
                     } else {
                         self.node_iters.pop();

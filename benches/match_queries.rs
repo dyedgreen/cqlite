@@ -79,8 +79,60 @@ pub fn short_path_where_id_eq(c: &mut Criterion) {
     });
 }
 
+pub fn match_node_with_label(c: &mut Criterion) {
+    let graph = Graph::open_anon().unwrap();
+
+    let create_node = |label: &str| {
+        graph
+            .prepare(&format!(
+                "CREATE (:{} {{ name: 'test name', number: 42 }})",
+                label
+            ))
+            .unwrap()
+    };
+
+    let mut txn = graph.mut_txn().unwrap();
+    for label in [
+        "THING",
+        "PERSON",
+        "CAKE",
+        "UNIVERSITY",
+        "EXCHANGE",
+        "CITY",
+        "PLANET",
+        "SCIENTIST",
+        "BOOK",
+        "COMPUTER",
+    ] {
+        let stmt = create_node(label);
+        for _ in 0..1000 {
+            stmt.execute(&mut txn, ()).unwrap();
+        }
+    }
+    txn.commit().unwrap();
+
+    c.bench_function("match node with label", |b| {
+        b.iter(|| {
+            let stmt = graph
+                .prepare("MATCH (a:BOOK) RETURN a.name, a.number")
+                .unwrap();
+            let mut txn = graph.txn().unwrap();
+            let val = stmt
+                .query_map(&mut txn, (), |m| {
+                    Ok((m.get::<String, _>(0)?, m.get::<i64, _>(1)?))
+                })
+                .unwrap()
+                .last()
+                .unwrap()
+                .unwrap();
+            black_box(val);
+        })
+    });
+}
+
 criterion_group! {
     benches,
     long_path_where_id_eq,
+    match_node_with_label,
 }
 criterion_main!(benches);

@@ -85,6 +85,7 @@ impl CompileEnv {
                 | Yield
                 | Halt
                 | IterNodes
+                | IterLabeledNodes { .. }
                 | IterOriginEdges { .. }
                 | IterTargetEdges { .. }
                 | IterBothEdges { .. }
@@ -373,6 +374,21 @@ impl CompileEnv {
             match step {
                 MatchStep::LoadAnyNode { name } => {
                     self.instructions.push(Instruction::IterNodes);
+                    self.instructions.push(Instruction::NoOp); // set after to calc jump
+                    self.push_node(*name);
+                    self.compile_step(plan, &steps[1..])?;
+                    self.pop_node(*name);
+                    self.instructions.push(Instruction::PopNode);
+                    self.instructions
+                        .push(Instruction::Jump { jump: start + 1 });
+                    self.instructions[start + 1] = Instruction::LoadNextNode {
+                        jump: self.instructions.len(),
+                    };
+                }
+                MatchStep::LoadLabeledNode { name, label } => {
+                    self.instructions.push(Instruction::IterLabeledNodes {
+                        label: label.to_string(),
+                    });
                     self.instructions.push(Instruction::NoOp); // set after to calc jump
                     self.push_node(*name);
                     self.compile_step(plan, &steps[1..])?;
