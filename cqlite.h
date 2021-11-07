@@ -31,13 +31,13 @@ enum CQLiteStatus {
 typedef uint8_t CQLiteStatus;
 
 enum CQLiteType {
-  CQLITE_ID,
-  CQLITE_INTEGER,
-  CQLITE_REAL,
-  CQLITE_BOOLEAN,
-  CQLITE_TEXT,
-  CQLITE_BLOB,
-  CQLITE_NULL,
+  CQLITE_ID = 0,
+  CQLITE_INTEGER = 1,
+  CQLITE_REAL = 2,
+  CQLITE_BOOLEAN = 3,
+  CQLITE_TEXT = 4,
+  CQLITE_BLOB = 5,
+  CQLITE_NULL = 6,
 };
 typedef uint8_t CQLiteType;
 
@@ -87,6 +87,8 @@ CQLiteStatus cqlite_bind_blob(struct CQLiteStatement *stmt,
                               uintptr_t length);
 
 CQLiteStatus cqlite_bind_null(struct CQLiteStatement *stmt, const char *name);
+
+uintptr_t cqlite_return_count(struct CQLiteStatement *stmt);
 
 CQLiteType cqlite_return_type(struct CQLiteStatement *stmt, uintptr_t idx);
 

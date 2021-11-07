@@ -43,13 +43,13 @@ pub enum CQLiteStatus {
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum CQLiteType {
-    CQLITE_ID,
-    CQLITE_INTEGER,
-    CQLITE_REAL,
-    CQLITE_BOOLEAN,
-    CQLITE_TEXT,
-    CQLITE_BLOB,
-    CQLITE_NULL,
+    CQLITE_ID = 0,
+    CQLITE_INTEGER = 1,
+    CQLITE_REAL = 2,
+    CQLITE_BOOLEAN = 3,
+    CQLITE_TEXT = 4,
+    CQLITE_BLOB = 5,
+    CQLITE_NULL = 6,
 }
 
 pub struct CQLiteGraph {
@@ -265,9 +265,10 @@ pub unsafe extern "C" fn cqlite_step(stmt: *mut CQLiteStatement) -> CQLiteStatus
 #[no_mangle]
 pub unsafe extern "C" fn cqlite_finalize(stmt: *mut CQLiteStatement) -> CQLiteStatus {
     if !stmt.is_null() {
+        let stmt_count = &(*(*stmt).graph).stmt_count;
         drop(Box::from_raw((*stmt).program));
         drop(Box::from_raw(stmt));
-        (*(*stmt).graph).stmt_count.fetch_sub(1, Ordering::SeqCst);
+        stmt_count.fetch_sub(1, Ordering::SeqCst);
     }
     CQLiteStatus::CQLITE_OK
 }
@@ -419,6 +420,11 @@ pub unsafe extern "C" fn cqlite_bind_null(
         Err(err) => err,
         Ok(()) => CQLiteStatus::CQLITE_OK,
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn cqlite_return_count(stmt: *mut CQLiteStatement) -> usize {
+    (*(*stmt).program).returns.len()
 }
 
 #[no_mangle]
