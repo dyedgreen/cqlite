@@ -123,17 +123,7 @@ impl<'txn> NodeIter<'txn> {
 
     pub(crate) fn with_label(txn: &'txn StoreTxn<'txn>, label: String) -> Result<Self, Error> {
         let mut cursor = BytesCursor::new(&txn.txn, &txn.labels)?;
-        // FIXME(dyedgreen): This is a curious issue with unsized
-        // cursors/ unsized iterators.
         cursor.set(&txn.txn, label.as_bytes(), None)?;
-        cursor.prev(&txn.txn)?;
-        if cursor
-            .current(&txn.txn)?
-            .map(|(key, _)| key != label.as_bytes())
-            .unwrap_or(false)
-        {
-            cursor.next(&txn.txn)?;
-        }
         Ok(Self::WithLabel(label, txn, cursor))
     }
 }
