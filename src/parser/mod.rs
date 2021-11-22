@@ -120,7 +120,7 @@ peg::parser! {
             e:expression() _* "=" _* kw_id() _* "(" _* n:ident() _* ")" { Condition::IdEq(n, e) }
             --
             a:expression() _* "="  _* b:expression() { Condition::Eq(a, b) }
-            a:expression() _* "<>" _* b:expression() { Condition::Ne(a, b) }
+            a:expression() _* ("<>" / "!=") _* b:expression() { Condition::Ne(a, b) }
             a:expression() _* "<"  _* b:expression() { Condition::Lt(a, b) }
             a:expression() _* "<=" _* b:expression() { Condition::Le(a, b) }
             a:expression() _* ">"  _* b:expression() { Condition::Gt(a, b) }
