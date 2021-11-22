@@ -10,20 +10,20 @@ peg::parser! {
     grammar cypher() for str {
         use ast::*;
 
-        rule kw_match()     = "MATCH"
-        rule kw_create()    = "CREATE"
-        rule kw_set()       = "SET"
-        rule kw_delete()    = "DELETE"
-        rule kw_where()     = "WHERE"
-        rule kw_return()    = "RETURN"
-        rule kw_true()      = "TRUE"
-        rule kw_false()     = "FALSE"
-        rule kw_null()      = "NULL"
-        rule kw_and()       = "AND"
-        rule kw_or()        = "OR"
-        rule kw_not()       = "NOT"
-        rule kw_id()        = "ID"
-        rule kw_label()     = "LABEL"
+        rule kw_match()     = ("MATCH" / "match")
+        rule kw_create()    = ("CREATE" / "create")
+        rule kw_set()       = ("SET" / "set")
+        rule kw_delete()    = ("DELETE" / "delete")
+        rule kw_where()     = ("WHERE" / "where")
+        rule kw_return()    = ("RETURN" / "return")
+        rule kw_true()      = ("TRUE" / "true")
+        rule kw_false()     = ("FALSE" / "false")
+        rule kw_null()      = ("NULL" / "null")
+        rule kw_and()       = ("AND" / "and")
+        rule kw_or()        = ("OR" / "or")
+        rule kw_not()       = ("NOT" / "not")
+        rule kw_id()        = ("ID" / "id")
+        rule kw_label()     = ("LABEL" / "label")
 
         rule _()
             = [' ']
