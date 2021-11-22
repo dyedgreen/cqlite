@@ -106,7 +106,7 @@ impl CompileEnv {
 
     fn compile_access_raw(&self, load: &LoadProperty) -> Result<Access, Error> {
         Ok(match load {
-            LoadProperty::Constant(val) => Access::Constant(val.clone()),
+            LoadProperty::Constant(val) => Access::Constant(val.to_owned()),
             LoadProperty::IdOfNode { node } => {
                 let node = self.get_stack_idx(*node)?;
                 Access::NodeId(node)

@@ -1,4 +1,4 @@
-use crate::store::PropOwned;
+use crate::store::PropRef;
 use std::cmp::{Ordering, PartialOrd};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +68,7 @@ impl<'src> Filter<'src> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LoadProperty<'src> {
-    Constant(PropOwned),
+    Constant(PropRef<'src>),
     IdOfNode { node: usize },
     IdOfEdge { edge: usize },
     LabelOfNode { node: usize },

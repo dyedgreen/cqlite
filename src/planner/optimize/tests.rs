@@ -1,5 +1,6 @@
 use super::*;
 use crate::planner::{Filter, LoadProperty, MatchStep, UpdateStep};
+use crate::store::PropRef;
 
 #[test]
 fn simplify_top_level_and() {
@@ -33,6 +34,43 @@ fn simplify_top_level_and() {
     };
 
     normalize::SplitTopLevelAnd::fix(&mut plan_before).unwrap();
+    assert_eq!(plan_before, plan_after);
+}
+
+#[test]
+fn canonicalize_check_node_label() {
+    let mut plan_before = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 0 },
+            MatchStep::Filter(Filter::Eq(
+                LoadProperty::Constant(PropRef::Text("LABEL")),
+                LoadProperty::LabelOfNode { node: 0 },
+            )),
+            MatchStep::Filter(Filter::Eq(
+                LoadProperty::LabelOfNode { node: 0 },
+                LoadProperty::Constant(PropRef::Text("LABEL")),
+            )),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+    let plan_after = QueryPlan {
+        steps: vec![
+            MatchStep::LoadAnyNode { name: 0 },
+            MatchStep::Filter(Filter::NodeHasLabel {
+                node: 0,
+                label: "LABEL",
+            }),
+            MatchStep::Filter(Filter::NodeHasLabel {
+                node: 0,
+                label: "LABEL",
+            }),
+        ],
+        updates: vec![],
+        returns: vec![],
+    };
+
+    normalize::CanonicalizeCheckNodeLabel::apply(&mut plan_before).unwrap();
     assert_eq!(plan_before, plan_after);
 }
 

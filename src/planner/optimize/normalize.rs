@@ -1,5 +1,6 @@
 use super::Optimization;
-use crate::planner::{Filter, MatchStep, QueryPlan, UpdateStep};
+use crate::planner::{Filter, LoadProperty, MatchStep, QueryPlan, UpdateStep};
+use crate::store::PropRef;
 use crate::Error;
 use std::collections::HashSet;
 
@@ -22,6 +23,38 @@ impl Optimization for SplitTopLevelAnd {
                     filter => vec![MatchStep::Filter(filter)],
                 },
                 step => vec![step],
+            })
+            .collect();
+        Ok(changed)
+    }
+}
+
+/// Normalize `LABEL(node) = "text"` to a canonical representation
+/// as `NodeHasLabel`.
+pub(crate) struct CanonicalizeCheckNodeLabel;
+
+impl Optimization for CanonicalizeCheckNodeLabel {
+    fn apply(plan: &mut QueryPlan) -> Result<bool, Error> {
+        let mut changed = false;
+        plan.steps = plan
+            .steps
+            .drain(..)
+            .map(|step| match step {
+                MatchStep::Filter(ref filter) => match filter {
+                    Filter::Eq(
+                        LoadProperty::LabelOfNode { node },
+                        LoadProperty::Constant(PropRef::Text(label)),
+                    )
+                    | Filter::Eq(
+                        LoadProperty::Constant(PropRef::Text(label)),
+                        LoadProperty::LabelOfNode { node },
+                    ) => {
+                        changed = true;
+                        MatchStep::Filter(Filter::NodeHasLabel { node: *node, label })
+                    }
+                    _ => step,
+                },
+                _ => step,
             })
             .collect();
         Ok(changed)
