@@ -1,5 +1,5 @@
 use crate::Error;
-use sanakirja::{AllocPage, Commit, Env, LoadPage, MutTxn, RootDb, RootPage, Txn};
+use sanakirja::{AllocPage, Commit, Env, LoadPage, MutTxn, RootDb, RootPage, Txn, MutPage};
 use std::borrow::Borrow;
 
 pub(crate) enum DynTxn<E: Borrow<Env>> {
@@ -103,6 +103,13 @@ impl<E: Borrow<Env>> AllocPage for DynTxn<E> {
         match self {
             DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
             DynTxn::MutTxn(txn) => Ok(txn.decr_rc_owned(off)?),
+        }
+    }
+
+    fn alloc_contiguous(&mut self, off: u64) -> Result<MutPage, <Self as LoadPage>::Error> {
+        match self {
+            DynTxn::Txn(_) => Err(Error::ReadOnlyWrite),
+            DynTxn::MutTxn(txn) => Ok(txn.alloc_contiguous(off)?),
         }
     }
 }
